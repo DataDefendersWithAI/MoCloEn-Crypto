@@ -10,7 +10,6 @@ from cryptography.hazmat.primitives import serialization
 import base64
 import uuid
 import oqs
-from casbin import Enforcer
 
 SIGN_ALGO = "Dilithium2"
 AES_MODE = AES.MODE_GCM
@@ -37,8 +36,6 @@ users = {}  # Store user balances
 server_private_key = ec.generate_private_key(EC_CURVE())
 server_public_key = server_private_key.public_key()
 
-# Casbin setup
-enforcer = Enforcer("model.conf", "policy.csv")
 
 # Generate Dilithium keys for signing
 def generate_keys():
@@ -161,8 +158,7 @@ def create_transaction():
     amount = transaction_data['amount']
 
     # Check if the sender has enough balance using Casbin
-    if not enforcer.enforce(sender, receiver, amount):
-        return jsonify({'status': 'failed', 'message': 'Insufficient funds'}), 403
+    
     
     print(f"Users: {users}")
 
