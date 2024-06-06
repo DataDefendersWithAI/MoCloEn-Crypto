@@ -19,16 +19,7 @@ AES_KEYLENGTH_BITS = 256
 HASH_MODE = SHA256
 EC_CURVE = ec.SECP256R1
 
-# TODO1: Add /balance to check user money, with this implement check if topup amount is larger than 0, not equal 0
-# TODO2: Enhance securuty on all requests and responses, all in encrypted and signed format, including error: Create helper functions:
-# - encrypt_and_sign(data, key): 
-# - decrypt_and_verify(data, key):
-# TODO3: Implement ABAC on all payment processes, including: topup, make transaction,...
-# TODO4: Add some ways to define all above constants in 1 session with /define-algo
-# TODO5: Enhance ECDH with CRYSTALS-Kyber maybe 512 or 1024
-# DELETED: Include Payment Gateway, with user-friendly client instead of client.py
 
-# Order: 2 -> 4 -> 1 -> 3 -> 5
 
 AES_KEYLENGTH = AES_KEYLENGTH_BITS // 8
 
