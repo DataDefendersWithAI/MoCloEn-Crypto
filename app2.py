@@ -18,6 +18,7 @@ AES_KEYLENGTH_BITS = 256
 HASH_MODE = SHA256
 EC_CURVE = ec.SECP256R1
 
+
 # TODO1: Add /balance to check user money, with this implement check if topup amount is larger than 0, not equal 0
 # TODO2: Enhance securuty on all requests and responses, all in encrypted and signed format, including error: Create helper functions:
 # - encrypt_and_sign(data, key): 
@@ -93,6 +94,10 @@ def ecdh_key_exchange():
         "signature_public_key": base64.b64encode(public_key).decode('utf-8')
     }
     return jsonify(server_response)
+
+@app.route('/')
+def index():
+    return jsonify({"message": "Welcome to the E-Wallet API!"})
 
 @app.route('/topup', methods=['POST'])
 def topup():
@@ -219,6 +224,13 @@ def get_transaction():
         'public_key': base64.b64encode(public_key).decode('utf-8'),  # Encode public key in Base64
         'status': 'success'  # Or 'failed' if applicable
     })
+
+
+@app.route('/')
+def index():
+    return jsonify({"message": "Welcome to the MoClon-Wallet API!"})
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
