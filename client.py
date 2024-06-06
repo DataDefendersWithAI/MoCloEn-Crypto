@@ -98,7 +98,7 @@ client_public_pem = client_public_key.public_bytes(
 # Sign client_public_pem
 signature = sign_message(client_public_pem.encode('utf-8'), secret_key)
 # Request to server
-response = session.post('http://localhost:5000/ecdh-key-exchange', json={
+response = session.post('http://localhost:5000/api/v1/keyexs/keyex', json={
     'client_public_key': client_public_pem, 
     "signature": base64.b64encode(signature).decode('utf-8'), 
     "signature_public_key": base64.b64encode(public_key).decode('utf-8')
@@ -115,6 +115,8 @@ server_public_key = serialization.load_pem_public_key(server_public_pem)
 
 shared_key = client_private_key.exchange(ec.ECDH(), server_public_key)
 aes_key = HKDF(shared_key, AES_KEYLENGTH, salt=SALT, hashmod=HASH_MODE, num_keys=1)
+
+print("AES Key:", aes_key)
 
 # Top up Alice's account
 topup_data = json.dumps({
