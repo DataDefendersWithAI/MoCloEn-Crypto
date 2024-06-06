@@ -26,7 +26,9 @@ EC_CURVE = ec.SECP256R1
 # TODO3: Implement ABAC on all payment processes, including: topup, make transaction,...
 # TODO4: Add some ways to define all above constants in 1 session with /define-algo
 # TODO5: Enhance ECDH with CRYSTALS-Kyber maybe 512 or 1024
-# TODO6: Include Payment Gateway, with user-friendly client instead of client.py
+# DELETED: Include Payment Gateway, with user-friendly client instead of client.py
+
+# Order: 2 -> 4 -> 1 -> 3 -> 5
 
 AES_KEYLENGTH = AES_KEYLENGTH_BITS // 8
 
@@ -41,18 +43,34 @@ server_public_key = server_private_key.public_key()
 enforcer = Enforcer("model.conf", "policy.csv")
 
 # Generate Dilithium keys for signing
-def generate_keys():
+def generate_keys() -> tuple[bytes, bytes]:
+    """
+    Generate Dilithium keys for signing
+    :return: tuple[bytes, bytes]: secret key and public key
+    """
     signer = oqs.Signature(SIGN_ALGO)
     public_key = signer.generate_keypair()
     return signer.export_secret_key(), public_key
 secret_key, public_key = generate_keys()
 
-def encrypt_aes_gcm(plaintext, key):
+def encrypt_aes_gcm(plaintext: bytes, key: bytes) -> str:
+    """
+    Encrypt plaintext using AES-GCM
+    :param plaintext: bytes: plaintext to encrypt
+    :param key: bytes: key to encrypt plaintext
+    :return: str: encrypted data in Base64 format
+    """
     cipher = AES.new(key, AES_MODE)
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
     return base64.b64encode(cipher.nonce + tag + ciphertext).decode('utf-8')
 
-def decrypt_aes_gcm(encrypted_data, key):
+def decrypt_aes_gcm(encrypted_data: str, key: bytes) -> str:
+    """
+    Decrypt encrypted data using AES-GCM
+    :param encrypted_data: str: encrypted data in Base64 format
+    :param key: bytes: key to decrypt data
+    :return: str: decrypted plaintext
+    """
     encrypted_data = base64.b64decode(encrypted_data)
     nonce = encrypted_data[:16]
     tag = encrypted_data[16:32]
@@ -60,23 +78,74 @@ def decrypt_aes_gcm(encrypted_data, key):
     cipher = AES.new(key, AES_MODE, nonce=nonce)
     return cipher.decrypt_and_verify(ciphertext, tag)
 
-def sign_message(message, secret_key):
+def sign_message(message: bytes, secret_key: bytes) -> bytes:
+    """
+    Sign message using Dilithium
+    :param message: bytes: message to sign
+    :param secret_key: bytes: secret key to sign message
+    :return: bytes: signature
+    """
     signer = oqs.Signature(SIGN_ALGO, secret_key=secret_key)
     return signer.sign(message)
 
-def verify_signature(message, signature, public_key):
+def verify_signature(message: bytes, signature: bytes, public_key: bytes) -> bool:
+    """
+    Verify signature using Dilithium
+    :param message: bytes: message to verify
+    :param signature: bytes: signature to verify
+    :param public_key: bytes: public key to verify signature
+    :return: bool: True if signature is valid, False otherwise
+    """
     verifier = oqs.Signature(SIGN_ALGO)
     return verifier.verify(message, signature, public_key)
 
+def encrypt_and_sign(message: str, encrypt_key: bytes | None, sign_prikey: bytes, sign_pubkey: bytes, message_key: str = "data") -> dict:
+    """
+    Encrypt and sign message
+    :param message: str: message to encrypt
+    :param encrypt_key: bytes: key to encrypt data
+    :param sign_prikey: bytes: private key to sign data
+    :param sign_pubkey: bytes: public key to verify signature
+    :return: dict: encrypted data and signature
+    """
+    if encrypt_key is not None:
+        encrypted_data = encrypt_aes_gcm(message.encode('utf-8'), encrypt_key)
+    else:
+        encrypted_data = message
+    signature = sign_message(encrypted_data.encode('utf-8'), sign_prikey)
+    return {
+        message_key: encrypted_data,
+        'signature': base64.b64encode(signature).decode('utf-8'),
+        'signature_public_key': base64.b64encode(sign_pubkey).decode('utf-8')
+    }
+
+def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "data")->str | None:
+    """
+    Decrypt and verify data
+    :param data: dict: data to decrypt and verify
+    :param data_key: str: key to get encrypted data
+    :param decrypt_key: bytes | None: key to decrypt data
+    :param verify_pubkey: bytes: public key to verify signature
+    :return: str | None: decrypted data or None if signature is invalid
+    """
+    encrypted_data = data[data_key]
+    signature = base64.b64decode(data['signature'])
+    signature_public_key = base64.b64decode(data['signature_public_key'])
+    if not verify_signature(encrypted_data.encode('utf-8'), signature, signature_public_key):
+        return None
+    if decrypt_key is None:
+        return encrypted_data
+    return decrypt_aes_gcm(encrypted_data, decrypt_key)
+
 @app.route('/ecdh-key-exchange', methods=['POST'])
 def ecdh_key_exchange():
+    """
+    Receive client public key, perform ECDH key exchange, derive AES key, and send server public key
+    """
     # Receive request
     client_request = request.get_json()
-    client_public_key = client_request['client_public_key']
-    signature = base64.b64decode(client_request['signature'])
-    signature_public_key = base64.b64decode(client_request['signature_public_key'])
-    # Check if message not change and from client request
-    if not verify_signature(client_public_key.encode('utf-8'), signature, signature_public_key):
+    client_public_key = decrypt_and_verify(client_request, None, 'client_public_key')
+    if client_public_key is None:
         return jsonify({'error': 'Invalid signature'}), 400
     # Load public key from ECDH
     client_public_key = serialization.load_pem_public_key(client_public_key.encode())
@@ -89,12 +158,7 @@ def ecdh_key_exchange():
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     ).decode()
     # Wrap server response
-    signature = sign_message(server_public_pem.encode("utf-8"), secret_key)
-    server_response = {
-        'server_public_key': server_public_pem,
-        "signature": base64.b64encode(signature).decode('utf-8'),
-        "signature_public_key": base64.b64encode(public_key).decode('utf-8')
-    }
+    server_response = encrypt_and_sign(server_public_pem, None, secret_key, public_key, 'server_public_key')
     return jsonify(server_response)
 
 @app.route('/topup', methods=['POST'])
