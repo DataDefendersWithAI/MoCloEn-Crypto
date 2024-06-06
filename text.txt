@@ -1,0 +1,15 @@
+key_exchanges:
+/api/v1/keyexs/keyexs/<keyex_id> GET key exchange
+/api/v1/keyexs/keyex POST key exchange
+
+accounts:
+/api/v1/accounts/account/<account_id>  GET account
+/api/v1/accounts/account-create POST account-create
+
+users:
+/api/v1/users/user/<user_id> GET user
+/api/v1/users/user-create POST user-create
+
+transactions:
+/api/v1/transactions/transaction/<transaction_id> GET transaction
+/api/v1/transactions/transaction-create POST transaction-create

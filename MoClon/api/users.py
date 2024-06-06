@@ -18,7 +18,7 @@ def api_get_user(user_id):
     }
     return jsonify(response_object), 200
 
-@users_api_v1.route('/user', methods=['POST'])
+@users_api_v1.route('/user-create', methods=['POST'])
 def api_create_user():
     data = request.get_json()
     #expect(data, 'username', 'password')

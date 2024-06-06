@@ -18,7 +18,7 @@ def api_get_transaction(transaction_id):
     }
     return jsonify(response_object), 200
 
-@transactions_api_v1.route('/transaction', methods=['POST'])
+@transactions_api_v1.route('/transaction-create', methods=['POST'])
 def api_create_transaction():
     data = request.get_json()
     # expect(data, 'transactionname', 'password')
