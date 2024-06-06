@@ -99,7 +99,7 @@ def verify_signature(message: bytes, signature: bytes, public_key: bytes) -> boo
     verifier = oqs.Signature(SIGN_ALGO)
     return verifier.verify(message, signature, public_key)
 
-def encrypt_and_sign(message: str, encrypt_key: bytes | None, sign_prikey: bytes, sign_pubkey: bytes, message_key: str = "data") -> dict:
+def encrypt_and_sign(message: str, encrypt_key: bytes | None, sign_prikey: bytes, sign_pubkey: bytes, message_key: str = "data", signature_key: str = "signature", signature_pubkey_key: str = "signature_public_key") -> dict:
     """
     Encrypt and sign message
     :param message: str: message to encrypt
@@ -115,11 +115,11 @@ def encrypt_and_sign(message: str, encrypt_key: bytes | None, sign_prikey: bytes
     signature = sign_message(encrypted_data.encode('utf-8'), sign_prikey)
     return {
         message_key: encrypted_data,
-        'signature': base64.b64encode(signature).decode('utf-8'),
-        'signature_public_key': base64.b64encode(sign_pubkey).decode('utf-8')
+        signature_key: base64.b64encode(signature).decode('utf-8'),
+        signature_pubkey_key: base64.b64encode(sign_pubkey).decode('utf-8')
     }
 
-def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "data")->str | None:
+def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "data", signature_key: str = "signature", signature_pubkey_key: str = "signature_public_key")->str | None:
     """
     Decrypt and verify data
     :param data: dict: data to decrypt and verify
@@ -129,8 +129,8 @@ def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "d
     :return: str | None: decrypted data or None if signature is invalid
     """
     encrypted_data = data[data_key]
-    signature = base64.b64decode(data['signature'])
-    signature_public_key = base64.b64decode(data['signature_public_key'])
+    signature = base64.b64decode(data[signature_key])
+    signature_public_key = base64.b64decode(data[signature_pubkey_key])
     if not verify_signature(encrypted_data.encode('utf-8'), signature, signature_public_key):
         return None
     if decrypt_key is None:
@@ -165,38 +165,30 @@ def ecdh_key_exchange():
 def topup():
     # Receive request
     data = request.get_json()
-    encrypted_data = data['encoded_AES_data']
-    signature = base64.b64decode(data['sign'])
-    client_public_key = base64.b64decode(data['public_key'])
     aes_key = session.get('aes_key')
     if aes_key is None:
         return jsonify({'error': 'No AES key in session'}), 400
-    if not verify_signature(encrypted_data.encode('utf-8'), signature, client_public_key):
+    decrypted_data = decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
+    if decrypted_data is None:
         return jsonify({'error': 'Invalid signature'}), 400
-    decrypted_data = decrypt_aes_gcm(encrypted_data, aes_key)
     topup_data = json.loads(decrypted_data)
     receiver = topup_data['receiver']
     amount = topup_data['amount']
-    # Check if user amount is negative
-    if amount < 0:
+    # Check if user amount is negative or zero
+    if amount <= 0:
         return jsonify({'status': 'failed', 'message': 'Invalid amount'}), 400
     # Update user balance
     if receiver not in users:
         users[receiver] = {'balance': 0}
     users[receiver]['balance'] += amount
+
+    print(f"Users after topup: {users} with amount {amount} for {receiver}")
     
     # Wrap up message: users[receiver] + {"status": "success"}
     # Caution: Python >= 3.9 supports this operation
     message = users[receiver] | {"status": "success"}
-    print(f"Top up: {json.dumps(message)}")
     # Encrypt and sign the updated user data
-    encrypted_user_data = encrypt_aes_gcm(json.dumps(message).encode('utf-8'), aes_key)
-    user_signature = sign_message(encrypted_user_data.encode('utf-8'), secret_key)
-    response_data = {
-        'data': encrypted_user_data,
-        'signature': base64.b64encode(user_signature).decode('utf-8'),
-        'signature_public_key': base64.b64encode(public_key).decode('utf-8')
-    }
+    response_data = encrypt_and_sign(json.dumps(message), aes_key, secret_key, public_key, 'data', 'signature', 'signature_public_key')
     return jsonify(response_data)
 
 
@@ -205,30 +197,29 @@ def topup():
 @app.route('/transaction', methods=['POST'])
 def create_transaction():
     data = request.get_json()
-    encrypted_data = data['encoded_AES_data']
-    signature = base64.b64decode(data['sign'])
-    client_public_key = base64.b64decode(data['public_key'])  # Decode Base64 back to binary
-    
+    # Check if the user has aes_key
     aes_key = session.get('aes_key')
     if aes_key is None:
         return jsonify({'error': 'No AES key in session'}), 400
-    
-    if not verify_signature(encrypted_data.encode('utf-8'), signature, client_public_key):
+    # Decrypt and verify the data
+    decrypted_data = decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
+    if decrypted_data is None:
         return jsonify({'error': 'Invalid signature'}), 400
     
-    decrypted_data = decrypt_aes_gcm(encrypted_data, aes_key)
     transaction_data = json.loads(decrypted_data)
 
     # Check if the sender has enough balance
     sender = transaction_data['sender']
     receiver = transaction_data['receiver']
     amount = transaction_data['amount']
+    message = transaction_data.get('message', f"Transaction from {sender} to {receiver} with amount {amount}")
+
+    if amount <= 0:
+        return jsonify({'status': 'failed', 'message': 'Invalid amount'}), 400
 
     # Check if the sender has enough balance using Casbin
     if not enforcer.enforce(sender, receiver, amount):
         return jsonify({'status': 'failed', 'message': 'Insufficient funds'}), 403
-    
-    print(f"Users: {users}")
 
     # Update user balances (assuming successful transaction)
     if sender not in users:
@@ -242,51 +233,55 @@ def create_transaction():
     transaction_id = str(uuid.uuid4())
     transaction_data['id'] = transaction_id
     transaction_data['timestamp'] = datetime.now().isoformat()
+    transaction_data['status'] = 'success'
+    transaction_data['message'] = message
     
-    encrypted_transaction = encrypt_aes_gcm(json.dumps(transaction_data).encode('utf-8'), aes_key)
-    signature = sign_message(encrypted_transaction.encode('utf-8'), secret_key)
+    encrypted_transaction = encrypt_and_sign(json.dumps(transaction_data), aes_key, secret_key, public_key, 'encoded_AES_data', 'sign', 'public_key')
     transactions[transaction_id] = {
-        'data': encrypted_transaction,
-        'signature': base64.b64encode(signature).decode('utf-8')
+        'encoded_AES_data': encrypted_transaction['encoded_AES_data'],
+        'sign': encrypted_transaction['sign'],
+        'public_key': encrypted_transaction['public_key']
     }
 
     print(f"Users after transaction: {users}")
-    
-    return jsonify({'transaction_id': transaction_id, 'status': 'success'})
+    # This is the transaction ID that the client can use to check the transaction status
+    # Must change in client.py
+    return jsonify(encrypted_transaction)
 
 @app.route('/transaction/check', methods=['POST'])
 def get_transaction():
     data = request.get_json()
-    encrypted_data = data['encoded_AES_data']
-    signature = base64.b64decode(data['sign'])
-    client_public_key = base64.b64decode(data['public_key'])  # Decode Base64 back to binary
-    
+    # Check if the user has aes_key
     aes_key = session.get('aes_key')
     if aes_key is None:
         return jsonify({'error': 'No AES key in session'}), 400
     
-    if not verify_signature(encrypted_data.encode('utf-8'), signature, client_public_key):
+    # Decrypt and verify the data
+    decrypted_data = decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
+    
+    if decrypted_data is None:
         return jsonify({'error': 'Invalid signature'}), 400
     
-    decrypted_data = decrypt_aes_gcm(encrypted_data, aes_key)
     transaction_id = decrypted_data.decode('utf-8')
     
     if transaction_id not in transactions:
         return jsonify({'error': 'Transaction not found'}), 404
     
     transaction = transactions[transaction_id]
-    encrypted_transaction_data = transaction['data']
-    transaction_signature = base64.b64decode(transaction['signature'])
     
-    if not verify_signature(encrypted_transaction_data.encode('utf-8'), transaction_signature, public_key):
+    transaction = decrypt_and_verify(transaction, aes_key, 'encoded_AES_data', 'sign', 'public_key')
+
+    if transaction is None:
         return jsonify({'error': 'Invalid signature'}), 400
     
-    return jsonify({
-        'encoded_AES_data': encrypted_transaction_data,
-        'sign': base64.b64encode(transaction_signature).decode('utf-8'),
-        'public_key': base64.b64encode(public_key).decode('utf-8'),  # Encode public key in Base64
-        'status': 'success'  # Or 'failed' if applicable
-    })
+    print(f"Transaction data for id {transaction_id}: {transaction}")
+    
+    encrypted_transaction_data = encrypt_and_sign(transaction.decode("utf-8"), aes_key, secret_key, public_key, 'encoded_AES_data', 'sign', 'public_key')
+    
+    return jsonify(
+        encrypted_transaction_data,
+        
+    )# 'status': 'success'  # Or 'failed' if applicable
 
 if __name__ == '__main__':
     app.run(debug=True)

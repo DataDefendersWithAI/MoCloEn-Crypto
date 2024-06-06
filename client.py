@@ -48,6 +48,44 @@ def verify_signature(message, signature, public_key):
     verifier = oqs.Signature(SIGN_ALGO)
     return verifier.verify(message, signature, public_key)
 
+def encrypt_and_sign(message: str, encrypt_key: bytes | None, sign_prikey: bytes, sign_pubkey: bytes, message_key: str = "data", signature_key: str = "signature", signature_pubkey_key: str = "signature_public_key") -> dict:
+    """
+    Encrypt and sign message
+    :param message: str: message to encrypt
+    :param encrypt_key: bytes: key to encrypt data
+    :param sign_prikey: bytes: private key to sign data
+    :param sign_pubkey: bytes: public key to verify signature
+    :return: dict: encrypted data and signature
+    """
+    if encrypt_key is not None:
+        encrypted_data = encrypt_aes_gcm(message.encode('utf-8'), encrypt_key)
+    else:
+        encrypted_data = message
+    signature = sign_message(encrypted_data.encode('utf-8'), sign_prikey)
+    return {
+        message_key: encrypted_data,
+        signature_key: base64.b64encode(signature).decode('utf-8'),
+        signature_pubkey_key: base64.b64encode(sign_pubkey).decode('utf-8')
+    }
+
+def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "data", signature_key: str = "signature", signature_pubkey_key: str = "signature_public_key")->str | None:
+    """
+    Decrypt and verify data
+    :param data: dict: data to decrypt and verify
+    :param data_key: str: key to get encrypted data
+    :param decrypt_key: bytes | None: key to decrypt data
+    :param verify_pubkey: bytes: public key to verify signature
+    :return: str | None: decrypted data or None if signature is invalid
+    """
+    encrypted_data = data[data_key]
+    signature = base64.b64decode(data[signature_key])
+    signature_public_key = base64.b64decode(data[signature_pubkey_key])
+    if not verify_signature(encrypted_data.encode('utf-8'), signature, signature_public_key):
+        return None
+    if decrypt_key is None:
+        return encrypted_data
+    return decrypt_aes_gcm(encrypted_data, decrypt_key)
+
 # Generate client keys for signing
 secret_key, public_key = generate_keys()
 
@@ -93,8 +131,6 @@ response = session.post('http://localhost:5000/topup', json={
     'public_key': base64.b64encode(public_key).decode('utf-8')
 })
 
-print(response.json())
-
 # Create and send transaction
 transaction_data = json.dumps({
     'sender': 'Alice',
@@ -111,26 +147,31 @@ response = session.post('http://localhost:5000/transaction', json={
     'public_key': base64.b64encode(public_key).decode('utf-8')  # Encode public key in Base64
 })
 
-print(response.json())
 
 # Get and verify transaction using POST method
-transaction_id = response.json()['transaction_id']
+transaction_response = response.json()
+
+decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
+
+if decrypted_data is None:
+    print("Invalid signature")
+    exit(1)
+
+transaction_id = json.loads(decrypted_data)['id']
+print("Transaction ID:", transaction_id)
 encrypted_transaction_id = encrypt_aes_gcm(str(transaction_id).encode('utf-8'), aes_key)
 signature = sign_message(encrypted_transaction_id.encode('utf-8'), secret_key)
+
+# Check transaction
 response = session.post('http://localhost:5000/transaction/check', json={
     'encoded_AES_data': encrypted_transaction_id,
     'sign': base64.b64encode(signature).decode('utf-8'),
     'public_key': base64.b64encode(public_key).decode('utf-8')  # Encode public key in Base64
 })
 transaction_response = response.json()
-
-encoded_AES_data = transaction_response['encoded_AES_data']
-sign = base64.b64decode(transaction_response['sign'])
-public_key = base64.b64decode(transaction_response['public_key'])  # Decode Base64 back to binary
-
-if verify_signature(encoded_AES_data.encode('utf-8'), sign, public_key):
-    decrypted_data = decrypt_aes_gcm(encoded_AES_data, aes_key)
-    transaction_data = json.loads(decrypted_data)
-    print(transaction_data)
+decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
+if decrypted_data is not None:
+    print("Transaction is valid")
+    print(decrypted_data)
 else:
     print("Invalid signature")
