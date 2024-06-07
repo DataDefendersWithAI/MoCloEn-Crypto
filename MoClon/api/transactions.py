@@ -1,9 +1,12 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app, redirect, url_for
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from MoClon.db import add_transaction, get_transaction, get_user
+from MoClon.api.crypto_helper import CryptoHelper
 
 from flask_cors import CORS
 from datetime import datetime
+import json
+import uuid
 
 import casbin
 from casbin import Enforcer
@@ -66,15 +69,35 @@ def api_get_all_transaction():
 @jwt_required()
 def api_create_transaction():
     data = request.get_json()
+
+    # My work: Create CryptoHelper object with params from session --------------------------
+    # Check if user has all params in session
+    if 'sign_algo' not in session or 'aes_mode' not in session \
+        or 'salt' not in session or 'aes_keylength_bits' not in session \
+        or 'hash_mode' not in session or 'ec_curve' not in session:
+        return jsonify({'error': 'Missing parameters in session. Please redirect to /api/v1/keyexs/algo to create'}), 400
+
+    crypto_helper = CryptoHelper(
+        sign_algo=session['sign_algo'],
+        aes_mode=session['aes_mode'],
+        salt=session['salt'],
+        aes_keylength_bits=session['aes_keylength_bits'],
+        hash_mode=session['hash_mode'],
+        ec_curve=session['ec_curve']
+    )
+    
     # Check if the user has aes_key
     aes_key = session.get('aes_key')
     if aes_key is None:
-        return jsonify({'error': 'No AES key in session'}), 400
+        # Redirect to /api/v1/keyexs/keyex to perform key exchange
+        return jsonify({'error': 'No AES key in session. Please redirect to /api/v1/keyexs/keyex to create'}), 400
     # Decrypt and verify the data
-    decrypted_data = decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
+    decrypted_data = crypto_helper.decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
     if decrypted_data is None:
         return jsonify({'error': 'Invalid signature'}), 400
     
+    ## End secure data retrieval ---------------------------
+
     transaction_data = json.loads(decrypted_data)
 
     #{
@@ -130,9 +153,9 @@ def api_create_transaction():
         'transaction_id': transaction_id,
         'data': transaction_data
     })
-    
-    #encypt transaction data
-    encrypted_transaction = encrypt_and_sign(json.dumps(transaction_data), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
+
+    # Encrypt and sign (i don't know why this is done here, but i will do it anyway)
+    encrypted_transaction = crypto_helper.encrypt_and_sign(json.dumps(transaction_data), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
     transactions[transaction_id] = {
         'status': "success",
         'transaction_id': transaction_id,
@@ -141,10 +164,27 @@ def api_create_transaction():
         'public_key': encrypted_transaction['public_key']
     }
 
-    return {
+    # Custom response with your response
+    response = {
         "status": "success",
         "message": "Transaction created successfully",
         "data": {
             "transaction_id": transaction_id
         }
-    }, 201
+    }
+
+    # My work to encrypt and sign the transaction data --------------------------
+
+    # Get secret key and public key from config, remember to client-friendly with ECDSA key
+    secret_key = current_app.config['SECRET_KEY']
+    public_key = current_app.config['PUBLIC_KEY']
+    if session['sign_algo'] == 'ECDSA':
+        secret_key = current_app.config['SECRET_KEY_EC']
+        public_key = current_app.config['PUBLIC_KEY_EC']
+    
+    # Encrypt and sign the response
+    encrypted_response = crypto_helper.encrypt_and_sign(json.dumps(response), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
+
+    return jsonify(encrypted_response), 201
+
+    # End secure data response ---------------------------

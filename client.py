@@ -9,8 +9,8 @@ import base64
 import oqs
 from MoClon.api.crypto_helper import CryptoHelper
 
-# SIGN_ALGO = "Dilithium2"
-SIGN_ALGO = "ECDSA"
+SIGN_ALGO = "Dilithium2"
+# SIGN_ALGO = "ECDSA"
 AES_MODE = AES.MODE_GCM
 SALT = None
 AES_KEYLENGTH_BITS = 256
