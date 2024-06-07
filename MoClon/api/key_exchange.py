@@ -74,17 +74,26 @@ def api_ecdh():
     public_key = current_app.config['PUBLIC_KEY']
     print(type(public_key))
     # public_key = ast.literal_eval(public_key)
+
+    if session["ec_curve"].lower() == "curve25519" and session["sign_algo"] == "ECDSA":
+        # Load server private key but ECDSA
+        secret_key = current_app.config['SECRET_KEY_EC']
+        print(type(secret_key))
+        # secret_key_ec = ast.literal_eval(secret_key_ec)
+        public_key = current_app.config['PUBLIC_KEY_EC']
+        print(type(public_key))
+        # public_key_ec = ast.literal_eval(public_key_ec)
     
     # Receive request
     client_request = request.get_json()
-    print(f"Client request: {client_request}")
+    # print(f"Client request: {client_request}")
     client_public_key_pem = client_request.get('client_public_key')
     signature = base64.b64decode(client_request.get('signature'))
     signature_public_key = base64.b64decode(client_request.get('signature_public_key'))
     
-    print(f"Client Public Key PEM: {client_public_key_pem}")
-    print(f"Signature: {signature}")
-    print(f"Signature Public Key: {signature_public_key}")
+    # print(f"Client Public Key PEM: {client_public_key_pem}")
+    # print(f"Signature: {signature}")
+    # print(f"Signature Public Key: {signature_public_key}")
 
     try:
         client_public_key_pem = client_request['client_public_key']

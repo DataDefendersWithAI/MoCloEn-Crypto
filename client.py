@@ -9,7 +9,8 @@ import base64
 import oqs
 from MoClon.api.crypto_helper import CryptoHelper
 
-SIGN_ALGO = "Dilithium2"
+# SIGN_ALGO = "Dilithium2"
+SIGN_ALGO = "ECDSA"
 AES_MODE = AES.MODE_GCM
 SALT = None
 AES_KEYLENGTH_BITS = 256
@@ -88,7 +89,7 @@ def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "d
 
 # Initialize CryptoHelper with parameters
 crypto_helper = CryptoHelper(
-    sign_algo='Dilithium2',
+    sign_algo=SIGN_ALGO,
     aes_mode="GCM",
     salt=None,
     aes_keylength_bits=256,
@@ -96,12 +97,15 @@ crypto_helper = CryptoHelper(
     ec_curve='curve25519'
 )
 
-# Generate client keys for signing
-secret_key, public_key = crypto_helper.generate_keys()
+if SIGN_ALGO == "Dilithium2":
+    # Generate client keys for signing
+    secret_key, public_key = crypto_helper.generate_keys()
+else:
+    secret_key, public_key = crypto_helper.generate_keys(goal="sign")
 
 # Set all algorithms and parameters into user session
 response = session.post('http://localhost:5000/api/v1/keyexs/algo', json={
-    'sign_algo': 'Dilithium2',
+    'sign_algo': SIGN_ALGO,
     'aes_mode': 'GCM',
     'salt': None,
     'aes_keylength_bits': 256,

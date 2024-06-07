@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, session
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import HKDF
 from Crypto.Hash import SHA256, SHA512, SHA3_256, SHA3_512
-from cryptography.hazmat.primitives.asymmetric import ec, x25519
+from cryptography.hazmat.primitives.asymmetric import ec, x25519, ed25519
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePrivateKey, EllipticCurvePublicKey
 import base64
@@ -71,7 +71,7 @@ class CryptoHelper:
             raise ValueError(f"Unsupported elliptic curve: {curve_name}")
         return curve
 
-    def generate_keys(self) -> tuple[bytes, bytes]:
+    def generate_keys(self, goal="exchange") -> tuple[bytes, bytes]:
         """
         Generate keys for signing based on the specified algorithm.
         :return: tuple[bytes, bytes]: secret key and public key
@@ -82,8 +82,14 @@ class CryptoHelper:
             return signer.export_secret_key(), public_key
         elif "EC" in self.sign_algo:
             if self.ec_curve == x25519.X25519PrivateKey:
-                private_key = x25519.X25519PrivateKey.generate()
-                public_key = private_key.public_key()
+                if goal == "exchange":
+                    private_key = x25519.X25519PrivateKey.generate()
+                    public_key = private_key.public_key()
+                elif goal == "sign":
+                    private_key = ed25519.Ed25519PrivateKey.generate()
+                    public_key = private_key.public_key()
+                else:
+                    raise ValueError("Unsupported goal")
             else:
                 private_key = ec.generate_private_key(self.ec_curve())
                 public_key = private_key.public_key()
@@ -138,7 +144,10 @@ class CryptoHelper:
             return signer.sign(message)
         elif "ECDSA" in self.sign_algo:
             private_key = serialization.load_pem_private_key(secret_key, password=None)
-            signature = private_key.sign(message, ECDSA(hashes.SHA256()))
+            if self.ec_curve == x25519.X25519PrivateKey:
+                signature = private_key.sign(message)
+            else:
+                signature = private_key.sign(message, ECDSA(hashes.SHA256()))
             return signature
         else:
             raise ValueError("Unsupported signing algorithm")
@@ -157,7 +166,10 @@ class CryptoHelper:
         elif "ECDSA" in self.sign_algo:
             public_key = serialization.load_pem_public_key(public_key)
             try:
-                public_key.verify(signature, message, ECDSA(hashes.SHA256()))
+                if self.ec_curve == x25519.X25519PrivateKey:
+                    public_key.verify(signature, message)
+                else:
+                    public_key.verify(signature, message, ECDSA(hashes.SHA256()))
                 return True
             except Exception as e:
                 return False
