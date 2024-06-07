@@ -182,20 +182,20 @@ print("AES Key:", aes_key)
 
 # --------------------------------------------------------------
 
-# Top up Alice's account
-topup_data = json.dumps({
-    'receiver': 'Alice',
-    'amount': 10
-}).encode('utf-8')
+# # Top up Alice's account
+# topup_data = json.dumps({
+#     'receiver': 'Alice',
+#     'amount': 10
+# }).encode('utf-8')
 
-encrypted_data = encrypt_aes_gcm(topup_data, aes_key)
-signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
+# encrypted_data = encrypt_aes_gcm(topup_data, aes_key)
+# signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-response = session.post('http://localhost:5000/topup', json={
-    'encoded_AES_data': encrypted_data,
-    'sign': base64.b64encode(signature).decode('utf-8'),
-    'public_key': base64.b64encode(public_key).decode('utf-8')
-})
+# response = session.post('http://localhost:5000/topup', json={
+#     'encoded_AES_data': encrypted_data,
+#     'sign': base64.b64encode(signature).decode('utf-8'),
+#     'public_key': base64.b64encode(public_key).decode('utf-8')
+# })
 
 # Create and send transaction
 transaction_data = json.dumps({
@@ -207,7 +207,7 @@ transaction_data = json.dumps({
 encrypted_data = encrypt_aes_gcm(transaction_data, aes_key)
 signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-response = session.post('http://localhost:5000/transaction', json={
+response = session.post('http://localhost:5000/api/v1/transactions/transaction-create', json={
     'encoded_AES_data': encrypted_data,
     'sign': base64.b64encode(signature).decode('utf-8'),
     'public_key': base64.b64encode(public_key).decode('utf-8')  # Encode public key in Base64

@@ -155,14 +155,14 @@ def api_create_transaction():
     })
 
     # Encrypt and sign (i don't know why this is done here, but i will do it anyway)
-    encrypted_transaction = crypto_helper.encrypt_and_sign(json.dumps(transaction_data), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
-    transactions[transaction_id] = {
-        'status': "success",
-        'transaction_id': transaction_id,
-        'data': encrypted_transaction['encoded_AES_data'],
-        'sign': encrypted_transaction['sign'],
-        'public_key': encrypted_transaction['public_key']
-    }
+    #encrypted_transaction = crypto_helper.encrypt_and_sign(json.dumps(transaction_data), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
+    #transactions[transaction_id] = {
+    #   'status': "success",
+    #    'transaction_id': transaction_id,
+    #    'data': encrypted_transaction['encoded_AES_data'],
+    #    'sign': encrypted_transaction['sign'],
+    #    'public_key': encrypted_transaction['public_key']
+    #}
 
     # Custom response with your response
     response = {
@@ -183,7 +183,7 @@ def api_create_transaction():
         public_key = current_app.config['PUBLIC_KEY_EC']
     
     # Encrypt and sign the response
-    encrypted_response = crypto_helper.encrypt_and_sign(json.dumps(response), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
+    encrypted_response = crypto_helper.encrypt_and_sign(json.dumps(response), aes_key, secret_key, public_key, 'encoded_AES_data', 'sign', 'public_key')
 
     return jsonify(encrypted_response), 201
 
