@@ -1,0 +1,7 @@
+p,user,/api/v1/users/user/*,GET 
+p,admin,/api/v1/users/user/*,GET 
+p,user,/api/v1/users/user-create,POST 
+p,user,/api/v1/accounts/account/*,GET 
+p,user,/api/v1/accounts/account-create,POST
+p,user,/api/v1/transactions/transaction/*,GET
+p,user,/api/v1/transactions/transaction-create,POST

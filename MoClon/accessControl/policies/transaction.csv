@@ -1,0 +1,1 @@
+p, "balance_check(r.sub['balance'], r.attr['amount'])  && r.sub.data.role =='user' &&  r.sub.data.attr.auth <= 3 ", /transaction-create, *

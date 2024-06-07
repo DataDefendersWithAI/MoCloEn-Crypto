@@ -1,7 +1,10 @@
 from flask import Flask, redirect, url_for
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
+
 from MoClon.api.users import users_api_v1
 from MoClon.api.accounts import accounts_api_v1
 from MoClon.api.transactions import transactions_api_v1
+from MoClon.api.authentication import authentications_api_v1
 
 from json import JSONEncoder
 from flask_cors import CORS
@@ -19,10 +22,12 @@ def create_app():
     #Login config
     #cross origin
     CORS(app)
+    jwt = JWTManager(app)
 
     #Blueprints
     app.register_blueprint(users_api_v1)
     app.register_blueprint(accounts_api_v1)
     app.register_blueprint(transactions_api_v1)
+    app.register_blueprint(authentications_api_v1)
 
     return app
