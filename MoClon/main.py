@@ -9,14 +9,15 @@ from flask_cors import CORS
 
 # from bson import json_util, ObjectId
 from datetime import datetime, timedelta
-from MoClon.config import Config
+from MoClon.config import DevelopmentConfig
+
 
 
 
 def create_app():
     app = Flask(__name__)
     app.config.from_pyfile('config.py')
-    app.config.from_object(Config)
+    app.config.from_object(DevelopmentConfig)
     #Database config
     #Bcrypt config
     #Login config

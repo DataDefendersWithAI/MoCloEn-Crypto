@@ -3,22 +3,20 @@ import json
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import HKDF
 from Crypto.Hash import SHA256
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, x25519
 from cryptography.hazmat.primitives import serialization
 import base64
 import oqs
+from MoClon.api.crypto_helper import CryptoHelper
 
 SIGN_ALGO = "Dilithium2"
 AES_MODE = AES.MODE_GCM
 SALT = None
 AES_KEYLENGTH_BITS = 256
 HASH_MODE = SHA256
-EC_CURVE = ec.SECP256R1
+EC_CURVE = x25519.X25519PrivateKey
 
 AES_KEYLENGTH = AES_KEYLENGTH_BITS // 8
-
-client_private_key = ec.generate_private_key(EC_CURVE())
-client_public_key = client_private_key.public_key()
 
 session = requests.Session()
 
@@ -86,37 +84,99 @@ def decrypt_and_verify(data: dict, decrypt_key: bytes | None, data_key: str = "d
         return encrypted_data
     return decrypt_aes_gcm(encrypted_data, decrypt_key)
 
-# Generate client keys for signing
-secret_key, public_key = generate_keys()
+# --------------------------------------------------------------
 
-# Exchange ECDH keys with the server
+# Initialize CryptoHelper with parameters
+crypto_helper = CryptoHelper(
+    sign_algo='Dilithium2',
+    aes_mode="GCM",
+    salt=None,
+    aes_keylength_bits=256,
+    hash_mode="SHA256",
+    ec_curve='curve25519'
+)
+
+# Generate client keys for signing
+secret_key, public_key = crypto_helper.generate_keys()
+
+# Set all algorithms and parameters into user session
+response = session.post('http://localhost:5000/api/v1/keyexs/algo', json={
+    'sign_algo': 'Dilithium2',
+    'aes_mode': 'GCM',
+    'salt': None,
+    'aes_keylength_bits': 256,
+    'hash_mode': 'SHA256',
+    'ec_curve': 'curve25519'
+})
+if response.status_code != 200:
+    print("Failed to set algorithms and parameters")
+    exit()
+
+# Generate client key pair for ECDH
+if crypto_helper.ec_curve == x25519.X25519PrivateKey:
+    client_private_key = x25519.X25519PrivateKey.generate()
+else:
+    client_private_key = ec.generate_private_key(crypto_helper.ec_curve)
+client_public_key = client_private_key.public_key()
+
+# Serialize client public key
 client_public_pem = client_public_key.public_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PublicFormat.SubjectPublicKeyInfo
 ).decode()
 
 # Sign client_public_pem
-signature = sign_message(client_public_pem.encode('utf-8'), secret_key)
-# Request to server
+signature = crypto_helper.sign_message(client_public_pem.encode('utf-8'), secret_key)
+
+# Request to server api/v1/keyexs/keyex
 response = session.post('http://localhost:5000/api/v1/keyexs/keyex', json={
     'client_public_key': client_public_pem, 
     "signature": base64.b64encode(signature).decode('utf-8'), 
     "signature_public_key": base64.b64encode(public_key).decode('utf-8')
 })
+
+print({
+    'client_public_key': client_public_pem, 
+    "signature": base64.b64encode(signature).decode('utf-8'), 
+    "signature_public_key": base64.b64encode(public_key).decode('utf-8')
+})
+
+if response.status_code != 200:
+    print("Failed to exchange keys with the server")
+    exit()
+
 # Collect response
-server_public_pem = response.json()['server_public_key'].encode()
-signature = base64.b64decode(response.json()['signature'])
-signature_public_key = base64.b64decode(response.json()['signature_public_key'])
+response_data = response.json()
+server_public_pem = response_data['server_public_key'].encode()
+signature = base64.b64decode(response_data['signature'])
+signature_public_key = base64.b64decode(response_data['signature_public_key'])
+
+print("Server Public Key:", server_public_pem, "\nSignature:", signature, "\nSignature Public Key:", signature_public_key)
+
 # Verify server public key
-if not verify_signature(server_public_pem, signature, signature_public_key):
+if not crypto_helper.verify_signature(server_public_pem, signature, signature_public_key):
     print("Invalid signature")
     exit()
 server_public_key = serialization.load_pem_public_key(server_public_pem)
 
-shared_key = client_private_key.exchange(ec.ECDH(), server_public_key)
-aes_key = HKDF(shared_key, AES_KEYLENGTH, salt=SALT, hashmod=HASH_MODE, num_keys=1)
+# Perform key exchange
+if isinstance(client_private_key, x25519.X25519PrivateKey):
+    shared_key = client_private_key.exchange(server_public_key)
+else:
+    shared_key = client_private_key.exchange(ec.ECDH(), server_public_key)
+
+# Derive AES key
+aes_key = HKDF(
+    shared_key,
+    crypto_helper.aes_keylength,
+    salt=crypto_helper.salt,
+    hashmod=crypto_helper.hash_mode,
+    num_keys=1
+)
 
 print("AES Key:", aes_key)
+
+# --------------------------------------------------------------
 
 # Top up Alice's account
 topup_data = json.dumps({
