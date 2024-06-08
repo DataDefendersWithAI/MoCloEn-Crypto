@@ -1,0 +1,74 @@
+key_exchanges:
+/api/v1/keyexs/keyexs/<keyex_id> GET key exchange
+/api/v1/keyexs/keyex POST key exchange
+
+accounts:
+/api/v1/accounts/account/<account_id>  GET account
+/api/v1/accounts/account-create POST account-create
+
+users: derpecated
+/api/v1/users/user/<user_id> GET user
+/api/v1/users/user-create POST user-create
+
+transactions:
+/api/v1/transactions/transaction/<transaction_id> GET transaction
+/api/v1/transactions/transaction-create POST transaction-create
+
+Account send format
+{ // login
+"username":
+"password":
+}
+
+{ //register
+"username":
+"password":
+"name":
+
+}
+
+Account save format
+{
+    "data": {
+        "username": ""        #send 
+        "user_id": ""        
+        "balance": 0.0
+        "account_type": "normal"
+        "created_at": "2013-10-07T00:00:00Z"
+        "attr":{
+            "auth": 0
+            "verified": 0
+        }
+    }, // this maybe encypted
+    "hash": "",                 #send password  
+}
+
+// calc of hash 
+client
+    hash = sha256( username + password + salt(user_id))
+server
+    hash = sha256( username + password + salt(user_id))
+    hash2 = sha3-256(hash + (pepper?) )
+
+
+Transaction send format
+{
+    "to_username":
+    "amount":
+    "message":
+    "timestamp":
+}
+
+Transaction save format
+{
+    "data": {                               
+        "sender_uid": ""
+        "recipient_uid": ""
+        "amount": 0.0
+        "timestamp": "2013-10-07T00:00:00Z
+        "message": ""
+    },  //this maybe encypted
+    "status": 1 (0,1)
+    "status_msg":"",
+    "transaction_id":""
+}

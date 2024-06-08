@@ -8,6 +8,8 @@ from cryptography.hazmat.primitives import serialization
 import base64
 import oqs
 from MoClon.api.crypto_helper import CryptoHelper
+from datetime import datetime
+
 
 SIGN_ALGO = "Dilithium2"
 # SIGN_ALGO = "ECDSA"
@@ -178,27 +180,26 @@ aes_key = HKDF(
     num_keys=1
 )
 
-print("AES Key:", aes_key)
+#print("AES Key:", aes_key)
 
 # --------------------------------------------------------------
 
-# Top up Alice's account
-def top_up_account():
-    topup_data = json.dumps({
-        'receiver': 'Alice',
-        'amount': 10
-    }).encode('utf-8')
+# # Top up Alice's account
+# topup_data = json.dumps({
+#     'receiver': 'Alice',
+#     'amount': 10
+# }).encode('utf-8')
 
-    encrypted_data = encrypt_aes_gcm(topup_data, aes_key)
-    signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
+# encrypted_data = encrypt_aes_gcm(topup_data, aes_key)
+# signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-    response = session.post('http://localhost:5000/api/v1/transactions/topup', json={
-        'encoded_AES_data': encrypted_data,
-        'sign': base64.b64encode(signature).decode('utf-8'),
-        'public_key': base64.b64encode(public_key).decode('utf-8')
-    })
+# response = session.post('http://localhost:5000/topup', json={
+#     'encoded_AES_data': encrypted_data,
+#     'sign': base64.b64encode(signature).decode('utf-8'),
+#     'public_key': base64.b64encode(public_key).decode('utf-8')
+# })
 
-
+# Create and send transaction
 def create_transac_check(jwt,recv_username,amt)->dict:
     transaction_data = json.dumps({
         'receiver_username': recv_username,
@@ -210,7 +211,7 @@ def create_transac_check(jwt,recv_username,amt)->dict:
     encrypted_data = encrypt_aes_gcm(transaction_data, aes_key)
     signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-    response = session.post('http://localhost:5000/api/v1/transactions/transaction-create', json={
+    response = session.post('http://localhost:5000/api/v1/transactions/create', json={
         'encoded_AES_data': encrypted_data,
         'sign': base64.b64encode(signature).decode('utf-8'),
         'public_key': base64.b64encode(public_key).decode('utf-8')  # Encode public key in Base64
@@ -235,12 +236,13 @@ def create_transac_check(jwt,recv_username,amt)->dict:
 
 
 def check_get_transac(jwt, transaction_id) -> dict:
-    session = requests.Session()
-    response = session.get(f'http://localhost:5000/api/v1/transactions/transaction/{transaction_id}', headers={
+    #session = requests.Session()
+    response = session.get(f'http://localhost:5000/api/v1/transactions/{transaction_id}', headers={
         'Authorization': f'Bearer {jwt}',
     })
 
     transaction_response = response.json()
+    print(transaction_response)
     decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
     
     if decrypted_data is not None:
@@ -302,3 +304,42 @@ def login_check(username,password)->dict:
     return {"status": True,  "jwt": json.loads(decrypted_data)['jwt']}
 
 
+def checking():
+    username1 = '0989743425'
+    password1 = "password1"
+    username2 = '0989793425'
+    password2 = "password2"
+
+    reg1 = register_check("bruh1", username1, password1)
+    reg2 = register_check("bruh2", username2, password2)
+    if(not reg1 or not reg2):
+        print("Register failed")
+        return
+    
+    log1= login_check(username1, password1)
+    jwt1 = log1['jwt']
+    print("Acc1: " + jwt1)
+    log2= login_check(username2, password2)
+    jwt2 = log2['jwt']
+    print("Acc2: " + jwt2)
+
+    if(not log1["status"] or not log2["status"]):
+        print("Login failed")
+        return
+    
+    tran1= create_transac_check(jwt1, username2, 24)
+    tran2= create_transac_check(jwt2, username1, 56)
+    print("Tran1: " + tran1['trasac_id'])
+
+    if(not tran1['status'] or not tran2['status']):
+        print("Transaction failed")
+        return
+    
+    get_tran = check_get_transac(jwt1, "14608140-944e-410d-8212-0282fd411515")
+    get_tran2 = check_get_transac(jwt1, "all")
+    if(not get_tran['status'] ):
+        print("Get transaction failed")
+        return
+    print("All checks passed")
+    
+checking()

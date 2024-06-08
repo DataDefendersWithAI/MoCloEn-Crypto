@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, session,current_app
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import HKDF
 from Crypto.Hash import SHA256, SHA512, SHA3_256, SHA3_512
@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePrivateKey, EllipticCurvePublicKey
 import base64
 import oqs
+import json
 
 class CryptoHelper:
     def __init__(self, sign_algo="Dilithium2", aes_mode="GCM", salt=None, aes_keylength_bits=256, hash_mode="SHA256", ec_curve="curve25519"):
@@ -226,3 +227,90 @@ class CryptoHelper:
         except:
             return False
         return True
+    
+    def encrypt_response(self, response_data:dict) -> dict:
+        response = response_data
+        aes_key = session.get('aes_key')
+            # Get secret key and public key from config, remember to client-friendly with ECDSA key
+        secret_key = current_app.config['SECRET_KEY']
+        public_key = current_app.config['PUBLIC_KEY']
+        if session['sign_algo'] == 'ECDSA':
+            secret_key = current_app.config['SECRET_KEY_EC']
+            public_key = current_app.config['PUBLIC_KEY_EC']
+        # Encrypt and sign the response
+        encrypted_response = self.encrypt_and_sign(json.dumps(response), aes_key, secret_key, public_key, 'encoded_AES_data', 'sign', 'public_key')
+        return encrypted_response
+
+
+    def decrypt_request(self, data:dict ) -> dict| None:
+        # Check if the user has aes_key
+        aes_key = session.get('aes_key')
+        if aes_key is None:
+            # Redirect to /api/v1/keyexs/keyex to perform key exchange
+            return {'error': 'No AES key in session. Please redirect to /api/v1/keyexs/keyex to create'}
+        # Decrypt and verify the data
+        decrypted_data = self.decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
+        if decrypted_data is None:
+            return {'error': 'Invalid signature'}
+        
+        return json.loads(decrypted_data) 
+        ## End secure data retrieval ---------------------------
+
+
+# Others functions
+def hashText(text, salt) -> str:
+    """
+        Basic hashing function for a text using random unique salt.  
+    """
+    hash1 = SHA256.new(data = salt.encode() + text.encode() ).hexdigest()
+    pepper = current_app.config['PEPPER']
+    hash2 = SHA3_256.new(data = pepper.encode() + hash1.encode()).hexdigest()
+    return hash2
+    
+def matchHashedText(hashedText, providedText , salt)->bool:
+    """
+        Check for the text in the hashed text
+    """
+    hashes = hashText(providedText, salt)
+    return hashedText == hashes
+
+def decryptRequest(request : dict) -> dict | None:
+    # My work: Create CryptoHelper object with params from session --------------------------
+    # Check if user has all params in session
+    if 'sign_algo' not in session or 'aes_mode' not in session \
+        or 'salt' not in session or 'aes_keylength_bits' not in session \
+        or 'hash_mode' not in session or 'ec_curve' not in session:
+        return {'error': 'Missing parameters in session. Please redirect to /api/v1/keyexs/algo to create'}
+
+    if not request or 'encoded_AES_data' not in request or 'sign'not in request or 'public_key' not in request:
+        return {'error': 'Missing parameters. Invalid payload.'}
+
+    crypto_helper = CryptoHelper(
+        sign_algo=session['sign_algo'],
+        aes_mode=session['aes_mode'],
+        salt=session['salt'],
+        aes_keylength_bits=session['aes_keylength_bits'],
+        hash_mode=session['hash_mode'],
+        ec_curve=session['ec_curve']
+    )
+
+    return crypto_helper.decrypt_request(request)
+
+def encryptResponse(response : dict) -> dict:
+    # My work: Create CryptoHelper object with params from session --------------------------
+    # Check if user has all params in session
+    if 'sign_algo' not in session or 'aes_mode' not in session \
+        or 'salt' not in session or 'aes_keylength_bits' not in session \
+        or 'hash_mode' not in session or 'ec_curve' not in session:
+        return {'error': 'Missing parameters in session. Please redirect to /api/v1/keyexs/algo to create'}
+
+    crypto_helper = CryptoHelper(
+        sign_algo=session['sign_algo'],
+        aes_mode=session['aes_mode'],
+        salt=session['salt'],
+        aes_keylength_bits=session['aes_keylength_bits'],
+        hash_mode=session['hash_mode'],
+        ec_curve=session['ec_curve']
+    )
+
+    return crypto_helper.encrypt_response(response)

@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify, session, current_app, redirect, url_for
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
-from MoClon.db import add_transaction, get_transaction, get_user
-from MoClon.api.crypto_helper import CryptoHelper
+from MoClon.db import add_transaction, get_transaction, get_user, get_user_by_username, get_user_by_hashes, update_balance, get_all_transactions
+from MoClon.api.crypto_helper import CryptoHelper,decryptRequest, encryptResponse
 
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import uuid
 
@@ -17,174 +17,123 @@ CORS(transactions_api_v1)
 
 ################################################################
 #ACCESS CONTROLS
-
-def balance_check(balance, amount):
-    return balance >= amount
-
 def d_transfer_access():
     e = Enforcer("MoClon/accessControl/models/transaction.conf", "MoClon/accessControl/policies/transaction.csv")
-    e.add_function("balance_check", balance_check)
     return e
 
 def d_transfer_get_access():
     e = Enforcer("MoClon/accessControl/models/transaction_get.conf", "MoClon/accessControl/policies/transaction_get.csv")
     return e
-
-def d_transfer_user_access():
-    e = Enforcer("MoClon/accessControl/models/transaction_user.conf", "MoClon/accessControl/policies/transaction_user.csv")
+def d_transfer_get_all_access():
+    e = Enforcer("MoClon/accessControl/models/transaction_get_all.conf", "MoClon/accessControl/policies/transaction_get_all.csv")
     return e
-
+transfer_get_all_access = d_transfer_get_all_access()
 transfer_get_access = d_transfer_get_access()
 transfer_access = d_transfer_access()
-transfer_user_access = d_transfer_user_access()
 ################################################################
 
-@transactions_api_v1.route('/transaction/<user_id>/<transaction_id>', methods=['GET'])
+def check_transaction_valid(from_, to_, req_)->dict:
+    if (req_['amount'] <= 0):
+        return {'status': 'fail', 'message': 'Invalid amount'}
+    elif (from_['data']['balance'] <= req_['amount']):
+        return {'status': 'fail', 'message': 'Insufficient balance'}
+    elif (from_['data']['username'] == to_['data']['username']):
+        return {'status': 'fail', 'message': 'Invalid receiver'}
+    elif (from_['data']['user_id'] == to_['data']['user_id']):
+        return {'status': 'fail', 'message': 'Invalid receiver'}
+    elif (from_['data']['attr']['auth'] >= 3):
+        return {'status': 'fail', 'message': 'Insufficient privileges'}
+    elif (to_['data']['attr']['auth'] >= 3):
+        return {'status': 'fail', 'message': 'Insufficient privileges'}
+    return {'status': 'success', 'message': 'Valid transaction'}
+
+@transactions_api_v1.route('/<transaction_id>', methods=['GET'])
 @jwt_required()
 def api_get_transaction(transaction_id):
     if transaction_id is None:
-        return jsonify({'error': 'Transaction ID not provided'}), 400
-    
-    user = get_user(get_jwt_identity())
-    #Check user access
-    if not transfer_get_access.enforce(user):
-        return jsonify({'error': 'Access denied'}), 400
-    
+        return jsonify(encryptResponse({'error': 'Transaction ID not provided'})), 400
+    user = get_user_by_hashes(get_jwt_identity())
     #get transaction
     transaction = get_transaction(transaction_id)
-    return jsonify(transaction), 200
+    #Check user access
+    if not transfer_get_access.enforce(user,transaction):
+        return jsonify(encryptResponse({'error': 'Access denied'})), 400
+    
+    return jsonify(encryptResponse(transaction)), 200
 
-@transactions_api_v1.route('/transaction/all', methods=['GET'])
+@transactions_api_v1.route('/all', methods=['GET'])
 @jwt_required()
 def api_get_all_transaction():
-    user = get_user(get_jwt_identity())
+    user = get_user_by_hashes(get_jwt_identity())    
     #Check user access
-    if not transfer_get_access.enforce(user):
+    if not transfer_get_all_access.enforce(user):
         return jsonify({'error': 'Access denied'}), 400
     #get all transaction
-    transactions={}
+    transactions= get_all_transactions()
     return jsonify(transactions), 200
 
-@transactions_api_v1.route('/transaction-create', methods=['POST'])
+
+@transactions_api_v1.route('/create', methods=['POST'])
 @jwt_required()
 def api_create_transaction():
     data = request.get_json()
-
-    # My work: Create CryptoHelper object with params from session --------------------------
-    # Check if user has all params in session
-    if 'sign_algo' not in session or 'aes_mode' not in session \
-        or 'salt' not in session or 'aes_keylength_bits' not in session \
-        or 'hash_mode' not in session or 'ec_curve' not in session:
-        return jsonify({'error': 'Missing parameters in session. Please redirect to /api/v1/keyexs/algo to create'}), 400
-
-    crypto_helper = CryptoHelper(
-        sign_algo=session['sign_algo'],
-        aes_mode=session['aes_mode'],
-        salt=session['salt'],
-        aes_keylength_bits=session['aes_keylength_bits'],
-        hash_mode=session['hash_mode'],
-        ec_curve=session['ec_curve']
-    )
+    transaction_data = decryptRequest(data)
     
-    # Check if the user has aes_key
-    aes_key = session.get('aes_key')
-    if aes_key is None:
-        # Redirect to /api/v1/keyexs/keyex to perform key exchange
-        return jsonify({'error': 'No AES key in session. Please redirect to /api/v1/keyexs/keyex to create'}), 400
-    # Decrypt and verify the data
-    decrypted_data = crypto_helper.decrypt_and_verify(data, aes_key, 'encoded_AES_data', 'sign', 'public_key')
-    if decrypted_data is None:
-        return jsonify({'error': 'Invalid signature'}), 400
-    
-    ## End secure data retrieval ---------------------------
+    if 'error' in transaction_data:
+        return encryptResponse({
+            "status": "fail",
+            "message": "An error occurred while creating transaction: " + transaction_data['error']
+        }), 400
 
-    transaction_data = json.loads(decrypted_data)
+    if not transaction_data or 'receiver_username' not in transaction_data \
+        or 'amount' not in transaction_data or 'timestamp' not in transaction_data or 'type' not in transaction_data:
+        return encryptResponse({
+            "status": "fail",
+            "message": "Invalid payload"
+        }), 400
 
-    #{
-    # sender_uid:
-    # recipient_uid:
-    # amount:
-    # message:
-    # timestamp:
-    #}
-    user = get_user(get_jwt_identity())
-    sender=  get_user(transaction_data['sender_uid'])
-    receiver = get_user(transaction_data['recipient_uid'])
-    if sender is None or receiver is None:
-        return jsonify({'error': 'Sender or receiver not found'}), 400
-    
-    if not transfer_user_access.enforce(user, sender):
-        return jsonify({'error': 'Access denied'}), 400
+    # timestamp check
+    timestamp = datetime.fromisoformat(transaction_data['timestamp'])
+    # Check if the timestamp is in the future or older than 3 minutes
+    if timestamp > datetime.now() or timestamp < datetime.now() - timedelta(minutes=3):
+        return encryptResponse({
+            "status": "fail",
+            "message": "Invalid timestamp"
+        }), 400
 
+    sender_acc = get_user_by_hashes(get_jwt_identity())
+    receiver_acc = get_user_by_username(transaction_data['receiver_username'])    
+
+    check = check_transaction_valid(sender_acc, receiver_acc, transaction_data)
+    if check is None or check['status'] =='fail':
+        #save as failed
+        return encryptResponse(check), 400
+
+    transaction_id = str(uuid.uuid4())
     amount = transaction_data['amount']
-    message = transaction_data['message']
-
-    # Check sender access
-    if not transfer_access.enforce(sender, receiver, amount):
-        #save as failed
-        return jsonify({'status': 'failed', 'message': 'Access denied'}), 400
-    
-    if amount <= 0:
-        #save as failed
-        return jsonify({'status': 'failed', 'message': 'Invalid amount'}), 400
-
-    # Check if the sender has enough balance using Casbin
-    if sender.balance <= amount:
-        #save as failed
-        return jsonify({'status': 'failed', 'message': 'Insufficient balance'}), 400
-
-    # Check if the sender and receiver are the same
-    if sender.username == receiver.username:
-        #save as failed
-        return jsonify({'status': 'failed', 'message': 'Sender and receiver cannot be the same'}), 400
-
     # Update user balances (assuming successful transaction)
-    sender.balance -= amount
-    receiver.balance += amount
+    sender_acc['data']['balance'] -= amount
+    receiver_acc['data']['balance'] += amount
+    sender_acc['data']['transactions'].append(transaction_id)
+    receiver_acc['data']['transactions'].append(transaction_id)
+    
+    update_balance([sender_acc, receiver_acc])
 
     # addition transaction data
-    transaction_id = str(uuid.uuid4())
-    
-    transaction_data['status'] = 'success'
-    transaction_data['message'] = message
-
+    transaction_data['sender_username'] = sender_acc['data']['username']
     # Save the transaction to the database
     add_transaction({
         'transaction_id': transaction_id,
-        'data': transaction_data
+        'data': transaction_data,
+        'status': "success",
+        'status_msg': "Transaction created successfully",
     })
 
-    # Encrypt and sign (i don't know why this is done here, but i will do it anyway)
-    #encrypted_transaction = crypto_helper.encrypt_and_sign(json.dumps(transaction_data), aes_key, secret_key, public_key, 'data', 'sign', 'public_key')
-    #transactions[transaction_id] = {
-    #   'status': "success",
-    #    'transaction_id': transaction_id,
-    #    'data': encrypted_transaction['encoded_AES_data'],
-    #    'sign': encrypted_transaction['sign'],
-    #    'public_key': encrypted_transaction['public_key']
-    #}
-
-    # Custom response with your response
-    response = {
+    
+    return encryptResponse({
         "status": "success",
         "message": "Transaction created successfully",
-        "data": {
-            "transaction_id": transaction_id
-        }
-    }
-
-    # My work to encrypt and sign the transaction data --------------------------
-
-    # Get secret key and public key from config, remember to client-friendly with ECDSA key
-    secret_key = current_app.config['SECRET_KEY']
-    public_key = current_app.config['PUBLIC_KEY']
-    if session['sign_algo'] == 'ECDSA':
-        secret_key = current_app.config['SECRET_KEY_EC']
-        public_key = current_app.config['PUBLIC_KEY_EC']
-    
-    # Encrypt and sign the response
-    encrypted_response = crypto_helper.encrypt_and_sign(json.dumps(response), aes_key, secret_key, public_key, 'encoded_AES_data', 'sign', 'public_key')
-
-    return jsonify(encrypted_response), 201
+        "data":  transaction_id
+    }), 200
 
     # End secure data response ---------------------------
