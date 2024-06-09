@@ -1,0 +1,18 @@
+.countdown {
+    width: 100%;
+}
+
+.countdown-item {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.countdown-title {
+    font-size: 2em; /* Điều chỉnh kích thước chữ nếu cần */
+}
+
+.countdown-text {
+    font-size: 1em; /* Điều chỉnh kích thước chữ nếu cần */
+}
