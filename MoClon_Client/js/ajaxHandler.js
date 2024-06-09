@@ -60,25 +60,159 @@ await _generateKeys();
 
 
 
-/**
- * Sign a message using a specific signing algorithm.
- * @param {string} signName - The name of the signing algorithm.
- * @param {string} message - The message to be signed.
- * @param {string} privateKeyBase64 - The base64 encoded private key.
- * @returns {Promise<string>} The base64 encoded signature.
- */
-async function signMessage(signName, message, privateKeyBase64) {
+// /**
+//  * Sign a message using a specific signing algorithm.
+//  * @param {string} signName - The name of the signing algorithm.
+//  * @param {string} message - The message to be signed.
+//  * @param {string} privateKeyBase64 - The base64 encoded private key.
+//  * @returns {Promise<string>} The base64 encoded signature.
+//  */
+// async function signMessage(signName, messageBase64, privateKeyBase64) {
+//     try {
+//         const sign = await getSIGNImplementation(signName);
+//         const privateKey = _base64ToArrayBuffer(privateKeyBase64);
+//         const messageBuffer = _base64ToArrayBuffer(messageBase64);
+
+//         if (privateKey.byteLength !== await sign.privateKeyBytes) {
+//             throw new Error(`Invalid private key length: got ${privateKey.byteLength} bytes, expected ${await sign.privateKeyBytes}`);
+//         }
+
+//         const { signature } = await sign.sign(messageBuffer, privateKey);
+
+//         return _arrayBufferToBase64(signature);
+
+//     } catch (error) {
+//         console.error(`Error signing message:`, error);
+//         throw error;
+//     }
+// }
+
+// /**
+//  * Verify a signature using a specific signing algorithm.
+//  * @param {string} signName - The name of the signing algorithm.
+//  * @param {string} message - The message to be verified.
+//  * @param {string} signatureBase64 - The base64 encoded signature.
+//  * @param {string} publicKeyBase64 - The base64 encoded public key.
+//  * @returns {Promise<boolean>} True if the signature is valid, otherwise false.
+//  */
+// async function verifySignature(signName, messageBase64, signatureBase64, publicKeyBase64) {
+//     try {
+//         const sign = await getSIGNImplementation(signName);
+//         const publicKey = _base64ToArrayBuffer(publicKeyBase64);
+//         const signature = _base64ToArrayBuffer(signatureBase64);
+//         const messageBuffer = _base64ToArrayBuffer(messageBase64);
+
+//         if (publicKey.byteLength !== await sign.publicKeyBytes) {
+//             throw new Error(`Invalid public key length: got ${publicKey.byteLength} bytes, expected ${await sign.publicKeyBytes}`);
+//         }
+
+//         if (signature.byteLength > await sign.signatureBytes) {
+//             throw new Error(`Invalid signature length: got ${signature.byteLength} bytes, expected at most ${await sign.signatureBytes}`);
+//         }
+
+//         return await sign.verify(signature, messageBuffer, publicKey);
+//     } catch (error) {
+//         console.error(`Error verifying signature:`, error);
+//         throw error;
+//     }
+// }
+
+
+// function _arrayBufferToBase64(buffer) {
+//     let binary = '';
+//     const bytes = new Uint8Array(buffer);
+//     const len = bytes.byteLength;
+//     for (let i = 0; i < len; i++) {
+//         binary += String.fromCharCode(bytes[i]);
+//     }
+//     return window.btoa(binary);
+// }
+
+// function _base64ToArrayBuffer(base64) {
+//     const binaryString = window.atob(base64);
+//     const len = binaryString.length;
+//     const bytes = new Uint8Array(len);
+//     for (let i = 0; i < len; i++) {
+//         bytes[i] = binaryString.charCodeAt(i);
+//     }
+//     return bytes.buffer;
+// }
+
+// /**
+//  * Run the complete signing process: key generation, signing, and verification.
+//  * @param {string} signName - The name of the signing algorithm.
+//  * @param {string} message - The message to be signed.
+//  * @returns {Promise<Object>} The result containing publicKey, privateKey, and signature.
+//  */
+
+// //#######################################################
+
+
+// async function encrypt(string, key, iv) {
+//     let encoded = new TextEncoder().encode(string);
+//     let encrypted = await crypto.subtle.encrypt({ "name": "AES-GCM", "iv": iv }, key, encoded);
+//     return { "encrypted": encrypted, "iv": iv };
+// }
+
+// async function decrypt(encrypted, iv, key) {
+//     let decrypted = await crypto.subtle.decrypt({ "name": "AES-GCM", "iv": iv }, key, encrypted);
+//     let decoder = new TextDecoder();
+//     let decoded = decoder.decode(decrypted);
+//     return decoded;
+// }
+
+// async function decrypt_and_verify(encryptedBase64, signatureBase64, publicKeyBase64) {
+//     let result = await verifySignature('dilithium2', encryptedBase64, signatureBase64, publicKeyBase64);
+//     if (result === false)
+//         return "Signature verification failed!";
+//     let encoded = _base64ToArrayBuffer(encrypted);
+//     let decrypted_message = await decrypt(encoded, Akeys.AES_IV, Akeys.AES_SECRET);
+//     return decrypted_message;
+// }
+
+// async function encrypt_and_sign(message) {
+//     let encrypted_message = await encrypt(message, Akeys.AES_SECRET, Akeys.AES_IV);
+//     let encrypted_data = _arrayBufferToBase64(encrypted_message.encrypted);
+//     let sign = await signMessage('dilithium2', encrypted_data, Akeys.SIGN_PRIVATE);
+
+//     return {
+//         'encoded_AES_data': encrypted_data,
+//         'sign': sign,
+//         'public_key': Akeys.SIGN_PUBLIC,
+//     }
+// }
+
+
+// let res = await encrypt_and_sign(JSON.stringify({
+//     "message": "Hello World!",
+//     "role": "baddev",
+//     "time": "-1",
+//     "data": {
+//         "money": 10000,
+//     },
+// }));
+// console.log(res);
+// let dec = await decrypt_and_verify(res.encoded_AES_data, res.sign, res.public_key);
+// console.log(dec);
+
+async function signMessage(signName, messageBase64, privateKeyBase64) {
     try {
         const sign = await getSIGNImplementation(signName);
         const privateKey = _base64ToArrayBuffer(privateKeyBase64);
+        const messageBuffer = _base64ToArrayBuffer(messageBase64);
+
+        console.log(`Signing with private key length: ${privateKey.byteLength}`);
+        console.log(`Message buffer length: ${messageBuffer.byteLength}`);
 
         if (privateKey.byteLength !== await sign.privateKeyBytes) {
             throw new Error(`Invalid private key length: got ${privateKey.byteLength} bytes, expected ${await sign.privateKeyBytes}`);
         }
 
-        const { signature } = await sign.sign(_utf8ToArrayBuffer(message), privateKey);
+        const { signature } = await sign.sign(messageBuffer, privateKey);
 
-        return _arrayBufferToBase64(signature);
+        const signatureBase64 = _arrayBufferToBase64(signature);
+        console.log(`Generated signature: ${signatureBase64}`);
+        return signatureBase64;
 
     } catch (error) {
         console.error(`Error signing message:`, error);
@@ -86,19 +220,16 @@ async function signMessage(signName, message, privateKeyBase64) {
     }
 }
 
-/**
- * Verify a signature using a specific signing algorithm.
- * @param {string} signName - The name of the signing algorithm.
- * @param {string} message - The message to be verified.
- * @param {string} signatureBase64 - The base64 encoded signature.
- * @param {string} publicKeyBase64 - The base64 encoded public key.
- * @returns {Promise<boolean>} True if the signature is valid, otherwise false.
- */
-async function verifySignature(signName, message, signatureBase64, publicKeyBase64) {
+async function verifySignature(signName, messageBase64, signatureBase64, publicKeyBase64) {
     try {
         const sign = await getSIGNImplementation(signName);
         const publicKey = _base64ToArrayBuffer(publicKeyBase64);
         const signature = _base64ToArrayBuffer(signatureBase64);
+        const messageBuffer = _base64ToArrayBuffer(messageBase64);
+
+        console.log(`Verifying with public key length: ${publicKey.byteLength}`);
+        console.log(`Signature length: ${signature.byteLength}`);
+        console.log(`Message buffer length: ${messageBuffer.byteLength}`);
 
         if (publicKey.byteLength !== await sign.publicKeyBytes) {
             throw new Error(`Invalid public key length: got ${publicKey.byteLength} bytes, expected ${await sign.publicKeyBytes}`);
@@ -108,117 +239,192 @@ async function verifySignature(signName, message, signatureBase64, publicKeyBase
             throw new Error(`Invalid signature length: got ${signature.byteLength} bytes, expected at most ${await sign.signatureBytes}`);
         }
 
-        return await sign.verify(signature, _utf8ToArrayBuffer(message), publicKey);
+        const verificationResult = await sign.verify(signature, messageBuffer, publicKey);
+        console.log(`Verification result: ${verificationResult}`);
+        return verificationResult;
     } catch (error) {
         console.error(`Error verifying signature:`, error);
         throw error;
     }
 }
 
-/**
- * Convert a Base64 string to an ArrayBuffer.
- * @param {string} base64 - The Base64 string.
- * @returns {ArrayBuffer} The resulting ArrayBuffer.
- */
+function _arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+}
+
 function _base64ToArrayBuffer(base64) {
-    const binary_string = window.atob(base64);
-    const len = binary_string.length;
+    const binaryString = window.atob(base64);
+    const len = binaryString.length;
     const bytes = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
-        bytes[i] = binary_string.charCodeAt(i);
+        bytes[i] = binaryString.charCodeAt(i);
     }
-    return bytes;
+    return bytes.buffer;
 }
-
-/**
- * Convert a UTF-8 string to an ArrayBuffer.
- * @param {string} string - The UTF-8 string.
- * @returns {ArrayBuffer} The resulting ArrayBuffer.
- */
-function _utf8ToArrayBuffer(string) {
-    const bytes = new Uint8Array(string.length);
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = string.charCodeAt(i);
-    }
-    return bytes;
-}
-
-/**
- * Convert an ArrayBuffer to a Base64 string.
- * @param {ArrayBuffer} buffer - The ArrayBuffer.
- * @returns {string} The resulting Base64 string.
- */
-function _arrayBufferToBase64(buffer) {
-    const CHUNK_SZ = 0x8000;
-    let c = [];
-    for (let i = 0; i < buffer.length; i += CHUNK_SZ) {
-        c.push(String.fromCharCode.apply(null, buffer.subarray(i, i + CHUNK_SZ)));
-    }
-    return window.btoa(c.join(''));
-}
-
-/**
- * Run the complete signing process: key generation, signing, and verification.
- * @param {string} signName - The name of the signing algorithm.
- * @param {string} message - The message to be signed.
- * @returns {Promise<Object>} The result containing publicKey, privateKey, and signature.
- */
-
-//#######################################################
-
 
 async function encrypt(string, key, iv) {
-    let encoded = new TextEncoder().encode(string);
-    let encrypted = await crypto.subtle.encrypt({ "name": "AES-GCM", "iv": iv }, key, encoded);
-    return encrypted = { "encrypted": encrypted, "iv": iv };
+    const encoded = new TextEncoder().encode(string);
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, encoded);
+    return { encrypted: encrypted, iv: iv };
 }
 
 async function decrypt(encrypted, iv, key) {
-    let decrypted = await crypto.subtle.decrypt({ "name": "AES-GCM", "iv": iv }, key, encrypted);
-    let decoder = new TextDecoder();
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, encrypted);
+    const decoder = new TextDecoder();
     const decoded = decoder.decode(decrypted);
     return decoded;
 }
 
-async function decrypt_and_verify(encrypted, signature, publicKeyBase64) {
-    const result = await verifySignature('dilithium2', encrypted, signature, publicKeyBase64);
-    if (result == false)
-        return "Verification failed";
-    const decrypted_message = await decrypt(encrypted, Akeys.AES_IV, Akeys.AES_SECRET);
-    return decrypted_message;
+async function decrypt_and_verify(encryptedBase64, signatureBase64, publicKeyBase64) {
+    const verificationResult = await verifySignature('dilithium2', encryptedBase64, signatureBase64, publicKeyBase64);
+    if (!verificationResult) {
+        return "Signature verification failed!";
+    }
+    const encoded = _base64ToArrayBuffer(encryptedBase64);
+    const decryptedMessage = await decrypt(encoded, Akeys.AES_IV, Akeys.AES_SECRET);
+    return decryptedMessage;
 }
 
 async function encrypt_and_sign(message) {
-    console.log(Akeys);
-    const encypted_message = await encrypt(message, Akeys.AES_SECRET, Akeys.AES_IV);
-    const result = await signMessage('dilithium2', encypted_message, Akeys.SIGN_PRIVATE);
+    const encryptedMessage = await encrypt(message, Akeys.AES_SECRET, Akeys.AES_IV);
+    const encryptedData = _arrayBufferToBase64(encryptedMessage.encrypted);
+    const signature = await signMessage('dilithium2', encryptedData, Akeys.SIGN_PRIVATE);
+
     return {
-        "encrypted": encypted_message.encrypted,
-        "signature": result,
-        "publicKey": Akeys.SIGN_PUBLIC,
+        encoded_AES_data: encryptedData,
+        sign: signature,
+        public_key: Akeys.SIGN_PUBLIC,
     };
 }
 
-async function encrypt_Request(message) {
-    const encypted_message = await encrypt_and_sign(message);
-    return encypted_message;
+// Example usage
+(async () => {
+    const message = JSON.stringify({
+        message: "Hello World!",
+        role: "baddev",
+        time: "-1",
+        data: {
+            money: 10000,
+        },
+    });
+
+    const res = await encrypt_and_sign(message);
+    console.log("Encrypted and signed data:", res);
+
+    const dec = await decrypt_and_verify(res.encoded_AES_data, res.sign, res.public_key);
+    console.log("Decrypted message:", dec);
+})().catch(error => {
+    console.error("Error in example usage:", error);
+});
+
+
+
+let ajaxHandler = {}
+
+ajaxHandler.login = async function (username, password) {
+    message = await encrypt_and_sign(JSON.stringify({
+        "username": username,
+        "password": password,
+    }));
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "POST",
+            url: "/api/v1/authentications/login",
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
 }
 
-async function decrypt_Response(encrypted, signature, publicKeyBase64) {
-    const decrypted_message = await decrypt_and_verify(encrypted, signature, publicKeyBase64);
-    return decrypted_message;
+ajaxHandler.register= async function (name, username, password) {
+    message = await encrypt_and_sign(JSON.stringify({
+        "name": name,
+        "username": username,
+        "password": password,
+    }));
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "POST",
+            url: "/api/v1/authentications/register",
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
 }
 
-let res = await encrypt_Request(JSON.stringify({
-    "message": "Hello World!",
-    "role": "baddev",
-    "time": "-1",
-    "data": {
-        "money": 10000,
-    },
-}));
-console.log(res);
-let dec = await decrypt_Response(res.encrypted, res.signature, res.publicKey);
-console.log(dec);
+ajaxHandler.transaction_create= async function (recv_username, amt) {
+    message = await encrypt_and_sign(JSON.stringify({
+        'receiver_username': recv_username,
+        'amount': amt,
+        'type': 'normal',
+        'message': 'Test transaction',
+        'timestamp': Date.now().toString(),
+    }));
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "POST",
+            url: "/api/v1/transactions/create",
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
+}
 
-export { encrypt_Request, decrypt_Response };
+ajaxHandler.transaction_check= async function (transaction_id) {
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "GET",
+            url: "/api/v1/transactions/"+transaction_id,
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
+}
+
+export {ajaxHandler};
