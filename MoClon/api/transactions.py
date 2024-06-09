@@ -24,9 +24,11 @@ def d_transfer_access():
 def d_transfer_get_access():
     e = Enforcer("MoClon/accessControl/models/transaction_get.conf", "MoClon/accessControl/policies/transaction_get.csv")
     return e
+
 def d_transfer_get_all_access():
     e = Enforcer("MoClon/accessControl/models/transaction_get_all.conf", "MoClon/accessControl/policies/transaction_get_all.csv")
     return e
+
 transfer_get_all_access = d_transfer_get_all_access()
 transfer_get_access = d_transfer_get_access()
 transfer_access = d_transfer_access()
@@ -50,90 +52,107 @@ def check_transaction_valid(from_, to_, req_)->dict:
 @transactions_api_v1.route('/<transaction_id>', methods=['GET'])
 @jwt_required()
 def api_get_transaction(transaction_id):
-    if transaction_id is None:
-        return jsonify(encryptResponse({'error': 'Transaction ID not provided'})), 400
-    user = get_user_by_hashes(get_jwt_identity())
-    #get transaction
-    transaction = get_transaction(transaction_id)
-    #Check user access
-    if not transfer_get_access.enforce(user,transaction):
-        return jsonify(encryptResponse({'error': 'Access denied'})), 400
-    
-    return jsonify(encryptResponse(transaction)), 200
+    try:
+        if transaction_id is None:
+            return jsonify(encryptResponse({'error': 'Transaction ID not provided'})), 400
+        user = get_user_by_hashes(get_jwt_identity())
+        #get transaction
+        transaction = get_transaction(transaction_id)
+        #Check user access
+        if not transfer_get_access.enforce(user,transaction):
+            return jsonify(encryptResponse({'error': 'Access denied'})), 400
+        
+        return jsonify(encryptResponse(transaction)), 200
+    except Exception as e:
+        print(e)
+        return jsonify(encryptResponse({'error': 'An error occurred while getting transaction'})), 500
 
 @transactions_api_v1.route('/all', methods=['GET'])
 @jwt_required()
 def api_get_all_transaction():
-    user = get_user_by_hashes(get_jwt_identity())    
-    #Check user access
-    if not transfer_get_all_access.enforce(user):
-        return jsonify({'error': 'Access denied'}), 400
-    #get all transaction
-    transactions= get_all_transactions()
-    return jsonify(transactions), 200
+    try:
+        user = get_user_by_hashes(get_jwt_identity())    
+        #Check user access
+        if not transfer_get_all_access.enforce(user):
+            return jsonify(encryptResponse({'error': 'Access denied'})), 400
+        #get all transaction
+        transactions= get_all_transactions()
+        return jsonify(encryptResponse({ 
+            "status": "success",
+            "data": transactions
+            })), 200
+    except Exception as e:
+        print(e)
+        return jsonify(encryptResponse({'error': 'An error occurred while getting transactions'})), 500
 
 
 @transactions_api_v1.route('/create', methods=['POST'])
 @jwt_required()
 def api_create_transaction():
-    data = request.get_json()
-    transaction_data = decryptRequest(data)
-    
-    if 'error' in transaction_data:
-        return encryptResponse({
+    try:
+        data = request.get_json()
+        transaction_data = decryptRequest(data)
+        
+        if 'error' in transaction_data:
+            return jsonify(encryptResponse({
+                "status": "fail",
+                "message": "An error occurred while creating transaction: " + transaction_data['error']
+            })), 400
+
+        if not transaction_data or 'receiver_username' not in transaction_data \
+            or 'amount' not in transaction_data or 'timestamp' not in transaction_data or 'type' not in transaction_data:
+            return jsonify(encryptResponse({
+                "status": "fail",
+                "message": "Invalid payload"
+            })), 400
+
+        # timestamp check
+        timestamp = datetime.fromisoformat(transaction_data['timestamp'])
+        # Check if the timestamp is in the future or older than 3 minutes
+        if timestamp > datetime.now() or timestamp < datetime.now() - timedelta(minutes=3):
+            return jsonify(encryptResponse({
+                "status": "fail",
+                "message": "Invalid timestamp"
+            })), 400
+
+        sender_acc = get_user_by_hashes(get_jwt_identity())
+        receiver_acc = get_user_by_username(transaction_data['receiver_username'])    
+
+        check = check_transaction_valid(sender_acc, receiver_acc, transaction_data)
+        if check is None or check['status'] =='fail':
+            #save as failed
+            return jsonify(encryptResponse(check)), 400
+
+        transaction_id = str(uuid.uuid4())
+        amount = transaction_data['amount']
+        # Update user balances (assuming successful transaction)
+        sender_acc['data']['balance'] -= amount
+        receiver_acc['data']['balance'] += amount
+        sender_acc['data']['transactions'].append(transaction_id)
+        receiver_acc['data']['transactions'].append(transaction_id)
+        
+        update_balance([sender_acc, receiver_acc])
+
+        # addition transaction data
+        transaction_data['sender_username'] = sender_acc['data']['username']
+        # Save the transaction to the database
+        add_transaction({
+            'transaction_id': transaction_id,
+            'data': transaction_data,
+            'status': "success",
+            'status_msg': "Transaction created successfully",
+        })
+
+        
+        return jsonify(encryptResponse({
+            "status": "success",
+            "message": "Transaction created successfully",
+            "data":  transaction_id
+        })), 200
+    except Exception as e:
+        print(e)
+        return jsonify(encryptResponse({
             "status": "fail",
-            "message": "An error occurred while creating transaction: " + transaction_data['error']
-        }), 400
-
-    if not transaction_data or 'receiver_username' not in transaction_data \
-        or 'amount' not in transaction_data or 'timestamp' not in transaction_data or 'type' not in transaction_data:
-        return encryptResponse({
-            "status": "fail",
-            "message": "Invalid payload"
-        }), 400
-
-    # timestamp check
-    timestamp = datetime.fromisoformat(transaction_data['timestamp'])
-    # Check if the timestamp is in the future or older than 3 minutes
-    if timestamp > datetime.now() or timestamp < datetime.now() - timedelta(minutes=3):
-        return encryptResponse({
-            "status": "fail",
-            "message": "Invalid timestamp"
-        }), 400
-
-    sender_acc = get_user_by_hashes(get_jwt_identity())
-    receiver_acc = get_user_by_username(transaction_data['receiver_username'])    
-
-    check = check_transaction_valid(sender_acc, receiver_acc, transaction_data)
-    if check is None or check['status'] =='fail':
-        #save as failed
-        return encryptResponse(check), 400
-
-    transaction_id = str(uuid.uuid4())
-    amount = transaction_data['amount']
-    # Update user balances (assuming successful transaction)
-    sender_acc['data']['balance'] -= amount
-    receiver_acc['data']['balance'] += amount
-    sender_acc['data']['transactions'].append(transaction_id)
-    receiver_acc['data']['transactions'].append(transaction_id)
-    
-    update_balance([sender_acc, receiver_acc])
-
-    # addition transaction data
-    transaction_data['sender_username'] = sender_acc['data']['username']
-    # Save the transaction to the database
-    add_transaction({
-        'transaction_id': transaction_id,
-        'data': transaction_data,
-        'status': "success",
-        'status_msg': "Transaction created successfully",
-    })
-
-    
-    return encryptResponse({
-        "status": "success",
-        "message": "Transaction created successfully",
-        "data":  transaction_id
-    }), 200
-
+            "message": "An error occurred while creating transaction"
+        })), 500
     # End secure data response ---------------------------
