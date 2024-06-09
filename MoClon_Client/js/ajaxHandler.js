@@ -303,96 +303,128 @@ async function encrypt_and_sign(message) {
     };
 }
 
-async function encrypt_Request(message) {
-    const encypted_message = await encrypt_and_sign(message);
-    return encypted_message;
-}
-
-async function decrypt_Response(encrypted, signature, publicKeyBase64) {
-    const decrypted_message = await decrypt_and_verify(encrypted, signature, publicKeyBase64);
-    return decrypted_message;
-}
-
-let res = await encrypt_Request(JSON.stringify({
-    "message": "Hello World!",
-    "role": "baddev",
-    "time": "-1",
-    "data": {
-        "money": 10000,
-    },
-}));
-console.log(res);
-let dec = await decrypt_Response(res.encrypted, res.signature, res.publicKey);
-console.log(dec);
-
-async function performKeyExchange() {
-    await window.sodium.ready;
-    const sodium = window.sodium;
-
-    // Generate client's key pair for ECDH
-    const clientKeyPair = sodium.crypto_kx_keypair();
-
-    // Serialize client's public key
-    const clientPublicKey = sodium.to_base64(clientKeyPair.publicKey);
-
-    // Sign client's public key using Ed25519
-    const signKeyPair = sodium.crypto_sign_keypair();
-    const signature = sodium.crypto_sign_detached(clientKeyPair.publicKey, signKeyPair.privateKey);
-
-    // First we need to include all algorithms we use in the request
-    $.ajax({
-        url: 'http://localhost:5000/api/v1/keyexs/algo',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            sign_algo: "Dilithium2",
-            aes_mode: "GCM",
-            salt: null,
-            aes_keylength_bits: 256,
-            hash_mode: "SHA256",
-            ec_curve: "curve25519"
-        }),
-        success: function(responseData) {
-            console.log(responseData);
-
-            // Send request to the server
-            $.ajax({
-                url: 'http://localhost:5000/api/v1/keyexs/keyex',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    client_public_key: clientPublicKey,
-                    signature: sodium.to_base64(signature),
-                    signature_public_key: sodium.to_base64(signKeyPair.publicKey)
-                }),
-                success: function(responseData) {
-                    const serverPublicKey = sodium.from_base64(responseData.server_public_key);
-                    const serverSignature = sodium.from_base64(responseData.signature);
-                    const serverSignaturePublicKey = sodium.from_base64(responseData.signature_public_key);
-
-                    // Verify server's signature
-                    const isValid = sodium.crypto_sign_verify_detached(serverSignature, serverPublicKey, serverSignaturePublicKey);
-                    if (!isValid) {
-                        console.error('Invalid signature');
-                        return;
-                    }
-
-                    // Perform key exchange to derive a shared key
-                    const sharedKey = sodium.crypto_kx_client_session_keys(clientKeyPair.publicKey, clientKeyPair.privateKey, serverPublicKey);
-
-                    console.log('Shared Key:', sodium.to_base64(sharedKey.sharedTx));
-                },
-                error: function() {
-                    console.error('Failed to exchange keys with the server');
-                }
-            });
+// Example usage
+(async () => {
+    const message = JSON.stringify({
+        message: "Hello World!",
+        role: "baddev",
+        time: "-1",
+        data: {
+            money: 10000,
         },
-        error: function() {
-            console.error('Failed to send algorithms to the server');
-        }
+    });
+
+    const res = await encrypt_and_sign(message);
+    console.log("Encrypted and signed data:", res);
+
+    const dec = await decrypt_and_verify(res.encoded_AES_data, res.sign, res.public_key);
+    console.log("Decrypted message:", dec);
+})().catch(error => {
+    console.error("Error in example usage:", error);
+});
+
+
+
+let ajaxHandler = {}
+
+ajaxHandler.login = async function (username, password) {
+    message = await encrypt_and_sign(JSON.stringify({
+        "username": username,
+        "password": password,
+    }));
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "POST",
+            url: "/api/v1/authentications/login",
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
     });
 }
 
-performKeyExchange();
+ajaxHandler.register= async function (name, username, password) {
+    message = await encrypt_and_sign(JSON.stringify({
+        "name": name,
+        "username": username,
+        "password": password,
+    }));
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "POST",
+            url: "/api/v1/authentications/register",
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
+}
 
-export { encrypt_Request, decrypt_Response };
+ajaxHandler.transaction_create= async function (recv_username, amt) {
+    message = await encrypt_and_sign(JSON.stringify({
+        'receiver_username': recv_username,
+        'amount': amt,
+        'type': 'normal',
+        'message': 'Test transaction',
+        'timestamp': Date.now().toString(),
+    }));
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "POST",
+            url: "/api/v1/transactions/create",
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
+}
+
+ajaxHandler.transaction_check= async function (transaction_id) {
+    // Send AJAX request to backend at /todo/group/create to add group
+    return new Promise(function (resolve, reject) {
+        $.ajax({
+            type: "GET",
+            url: "/api/v1/transactions/"+transaction_id,
+            data: JSON.stringify(message),
+            contentType: "application/json",
+            dataType: "json",
+            success: function (data) {
+                console.log("Success");
+                resolve(data);
+            },
+            error: function (data) {
+                console.log("Error");
+                reject(data);
+            }
+        });
+    });
+}
+
+export {ajaxHandler};
