@@ -11,8 +11,8 @@ users: derpecated
 /api/v1/users/user-create POST user-create
 
 transactions:
-/api/v1/transactions/transaction/<transaction_id> GET transaction
-/api/v1/transactions/transaction-create POST transaction-create
+/api/v1/transactions/<transaction_id> GET transaction
+/api/v1/transactions/create POST transaction-create
 
 Account send format
 { // login

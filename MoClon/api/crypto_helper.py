@@ -206,6 +206,8 @@ class CryptoHelper:
         :param verify_pubkey: bytes: public key to verify signature
         :return: str | None: decrypted data or None if signature is invalid
         """
+        if data_key not in data:
+            return None
         encrypted_data = data[data_key]
         signature = base64.b64decode(data[signature_key])
         signature_public_key = base64.b64decode(data[signature_pubkey_key])
