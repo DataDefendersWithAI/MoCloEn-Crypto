@@ -192,7 +192,7 @@ Here's a detailed API report for both request and response, including the type o
 #### Request
 
 **Request Payload:**
-None
+ - None
 **Headers:**
 ```json
 {
@@ -279,7 +279,7 @@ None
  - `username`: user unique identifier (phone number) (string).
  - `password`: user password (string)
 **Headers:**
-None
+ - None
 
 #### Response
 
@@ -346,7 +346,7 @@ None
  - `username`: user unique identifier (phone number) (string).
  - `password`: user password (string)
 **Headers:**
-None
+- None
 
 #### Response
 
