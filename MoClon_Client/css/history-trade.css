@@ -1,0 +1,27 @@
+/* .my__row__header {
+    background-color: rgb(195, 203, 223);
+    padding: 10px 0;
+    border-bottom: 2px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.row__common {
+    text-align: center;
+}
+.common {
+    padding: 5px;
+    border-left: 1px solid #dee2e6;
+}
+.common:first-child {
+    border-left: none;
+}
+.res__check {
+    background-color: #EFF2F5;
+    border-radius: 5px;
+    width: 100px;
+    height: 40px;
+    cursor: pointer;
+    transition: all 0.5s;
+}
+.res__check:hover {
+    background-color: #0b5276;
+} */

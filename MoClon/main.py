@@ -27,4 +27,5 @@ def create_app():
     app.register_blueprint(authentications_api_v1)
     app.register_blueprint(keyexs_api_v1)
 
+
     return app

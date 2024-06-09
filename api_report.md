@@ -191,8 +191,6 @@ Here's a detailed API report for both request and response, including the type o
 
 #### Request
 
-**Request Payload:**
- - None
 **Headers:**
 ```json
 {
@@ -278,8 +276,7 @@ Here's a detailed API report for both request and response, including the type o
 ```
  - `username`: user unique identifier (phone number) (string).
  - `password`: user password (string)
-**Headers:**
- - None
+
 
 #### Response
 
@@ -345,8 +342,6 @@ Here's a detailed API report for both request and response, including the type o
  - `name` : user's name (string)
  - `username`: user unique identifier (phone number) (string).
  - `password`: user password (string)
-**Headers:**
-- None
 
 #### Response
 
