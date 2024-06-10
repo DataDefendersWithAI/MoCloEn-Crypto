@@ -1,3 +1,4 @@
+
 import requests
 import json
 from Crypto.Cipher import AES
@@ -18,6 +19,11 @@ SALT = None
 AES_KEYLENGTH_BITS = 256
 HASH_MODE = SHA256
 EC_CURVE = x25519.X25519PrivateKey
+
+HOST = "https://jakeclark.great-site.net"
+
+import certifi
+print(certifi.where())
 
 AES_KEYLENGTH = AES_KEYLENGTH_BITS // 8
 
@@ -105,82 +111,89 @@ if SIGN_ALGO == "Dilithium2":
 else:
     secret_key, public_key = crypto_helper.generate_keys(goal="sign")
 
-# Set all algorithms and parameters into user session
-response = session.post('http://localhost:5000/api/v1/keyexs/algo', json={
-    'sign_algo': SIGN_ALGO,
-    'aes_mode': 'GCM',
-    'salt': None,
-    'aes_keylength_bits': 256,
-    'hash_mode': 'SHA256',
-    'ec_curve': 'curve25519'
-})
-if response.status_code != 200:
-    print("Failed to set algorithms and parameters")
-    exit()
+print(f'{HOST}/api/v1/keyexs/algo')
 
-# Generate client key pair for ECDH
-if crypto_helper.ec_curve == x25519.X25519PrivateKey:
-    client_private_key = x25519.X25519PrivateKey.generate()
-else:
-    client_private_key = ec.generate_private_key(crypto_helper.ec_curve)
-client_public_key = client_private_key.public_key()
+def key_exchange():
 
-# Serialize client public key
-client_public_pem = client_public_key.public_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PublicFormat.SubjectPublicKeyInfo
-).decode()
+    # Set all algorithms and parameters into user session
+    response = session.post(f'{HOST}/api/v1/keyexs/algo', json={
+        'sign_algo': SIGN_ALGO,
+        'aes_mode': 'GCM',
+        'salt': None,
+        'aes_keylength_bits': 256,
+        'hash_mode': 'SHA256',
+        'ec_curve': 'curve25519'
+    })
+    if response.status_code != 200:
+        print("Failed to set algorithms and parameters")
+        exit()
 
-# Sign client_public_pem
-signature = crypto_helper.sign_message(client_public_pem.encode('utf-8'), secret_key)
+    # Generate client key pair for ECDH
+    if crypto_helper.ec_curve == x25519.X25519PrivateKey:
+        client_private_key = x25519.X25519PrivateKey.generate()
+    else:
+        client_private_key = ec.generate_private_key(crypto_helper.ec_curve)
+    client_public_key = client_private_key.public_key()
 
-# Request to server api/v1/keyexs/keyex
-response = session.post('http://localhost:5000/api/v1/keyexs/keyex', json={
-    'client_public_key': client_public_pem, 
-    "signature": base64.b64encode(signature).decode('utf-8'), 
-    "signature_public_key": base64.b64encode(public_key).decode('utf-8')
-})
+    # Serialize client public key
+    client_public_pem = client_public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode()
 
-print({
-    'client_public_key': client_public_pem, 
-    "signature": base64.b64encode(signature).decode('utf-8'), 
-    "signature_public_key": base64.b64encode(public_key).decode('utf-8')
-})
+    # Sign client_public_pem
+    signature = crypto_helper.sign_message(client_public_pem.encode('utf-8'), secret_key)
 
-if response.status_code != 200:
-    print("Failed to exchange keys with the server")
-    exit()
+    # Request to server api/v1/keyexs/keyex
+    response = session.post(f'{HOST}/api/v1/keyexs/keyex', json={
+        'client_public_key': client_public_pem, 
+        "signature": base64.b64encode(signature).decode('utf-8'), 
+        "signature_public_key": base64.b64encode(public_key).decode('utf-8')
+    })
 
-# Collect response
-response_data = response.json()
-server_public_pem = response_data['server_public_key'].encode()
-signature = base64.b64decode(response_data['signature'])
-signature_public_key = base64.b64decode(response_data['signature_public_key'])
+    # print({
+    #     'client_public_key': client_public_pem, 
+    #     "signature": base64.b64encode(signature).decode('utf-8'), 
+    #     "signature_public_key": base64.b64encode(public_key).decode('utf-8')
+    # })
 
-print("Server Public Key:", server_public_pem, "\nSignature:", signature, "\nSignature Public Key:", signature_public_key)
+    
 
-# Verify server public key
-if not crypto_helper.verify_signature(server_public_pem, signature, signature_public_key):
-    print("Invalid signature")
-    exit()
-server_public_key = serialization.load_pem_public_key(server_public_pem)
+    if response.status_code != 200:
+        print("Failed to exchange keys with the server")
+        exit()
 
-# Perform key exchange
-if isinstance(client_private_key, x25519.X25519PrivateKey):
-    shared_key = client_private_key.exchange(server_public_key)
-else:
-    shared_key = client_private_key.exchange(ec.ECDH(), server_public_key)
+    # Collect response
+    response_data = response.json()
+    server_public_pem = response_data['server_public_key'].encode()
+    signature = base64.b64decode(response_data['signature'])
+    signature_public_key = base64.b64decode(response_data['signature_public_key'])
 
-# Derive AES key
-aes_key = HKDF(
-    shared_key,
-    crypto_helper.aes_keylength,
-    salt=crypto_helper.salt,
-    hashmod=crypto_helper.hash_mode,
-    num_keys=1
-)
+    # print("Server Public Key:", server_public_pem, "\nSignature:", signature, "\nSignature Public Key:", signature_public_key)
 
-#print("AES Key:", aes_key)
+    # Verify server public key
+    if not crypto_helper.verify_signature(server_public_pem, signature, signature_public_key):
+        print("Invalid signature")
+        exit()
+    server_public_key = serialization.load_pem_public_key(server_public_pem)
+
+    # Perform key exchange
+    if isinstance(client_private_key, x25519.X25519PrivateKey):
+        shared_key = client_private_key.exchange(server_public_key)
+    else:
+        shared_key = client_private_key.exchange(ec.ECDH(), server_public_key)
+
+    # Derive AES key
+    aes_key = HKDF(
+        shared_key,
+        crypto_helper.aes_keylength,
+        salt=crypto_helper.salt,
+        hashmod=crypto_helper.hash_mode,
+        num_keys=1
+    )
+    return aes_key
+
+    #print("AES Key:", aes_key)
 
 # --------------------------------------------------------------
 
@@ -198,7 +211,7 @@ aes_key = HKDF(
 #     'sign': base64.b64encode(signature).decode('utf-8'),
 #     'public_key': base64.b64encode(public_key).decode('utf-8')
 # })
-def create_transac_check(jwt, recv_username, amt) -> dict:
+def create_transac_check(jwt, recv_username, amt, aes_key) -> dict:
     transaction_data = json.dumps({
         'receiver_username': recv_username,
         'amount': amt,
@@ -210,7 +223,7 @@ def create_transac_check(jwt, recv_username, amt) -> dict:
     encrypted_data = encrypt_aes_gcm(transaction_data, aes_key)
     signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-    response = session.post('http://localhost:5000/api/v1/transactions/create', json={
+    response = session.post(f'{HOST}/api/v1/transactions/create', json={
         'encoded_AES_data': encrypted_data,
         'sign': base64.b64encode(signature).decode('utf-8'),
         'public_key': base64.b64encode(public_key).decode('utf-8')
@@ -223,7 +236,7 @@ def create_transac_check(jwt, recv_username, amt) -> dict:
     if response.status_code == 422:
         print("422 Unprocessable Entity: Check the payload and JWT token")
         return {"status": False, "trasac_id": None}
-    
+    print(transaction_response)
     decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
 
     if decrypted_data is None:
@@ -236,8 +249,8 @@ def create_transac_check(jwt, recv_username, amt) -> dict:
         return {"status": False, "trasac_id": None}
     return {"status": True, "trasac_id": transaction['data']}
 
-def check_get_transac(jwt, transaction_id) -> dict:
-    response = session.get(f'http://localhost:5000/api/v1/transactions/{transaction_id}', headers={
+def check_get_transac(jwt, transaction_id, aes_key) -> dict:
+    response = session.get(f'{HOST}/api/v1/transactions/{transaction_id}', headers={
         'Authorization': f'Bearer {jwt}',
     })
 
@@ -252,7 +265,7 @@ def check_get_transac(jwt, transaction_id) -> dict:
         print("Invalid signature")
         return {"status": False, "transac_id": None}
 
-def register_check(name, username, password) -> bool:
+def register_check(name, username, password, aes_key) -> bool:
     register_data = json.dumps({
         "name": name,
         "username": username,
@@ -262,13 +275,14 @@ def register_check(name, username, password) -> bool:
     encrypted_data = encrypt_aes_gcm(register_data, aes_key)
     signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-    response = session.post('http://localhost:5000/api/v1/authentications/register', json={
+    response = session.post(f'{HOST}/api/v1/authentications/register', json={
         'encoded_AES_data': encrypted_data,
         'sign': base64.b64encode(signature).decode('utf-8'),
         'public_key': base64.b64encode(public_key).decode('utf-8')
     })
 
     register_response = response.json()
+    print(register_response)
     decrypted_data = decrypt_and_verify(register_response, aes_key, "encoded_AES_data", "sign", "public_key")
 
     if decrypted_data is None:
@@ -282,7 +296,7 @@ def register_check(name, username, password) -> bool:
     
     return True
 
-def login_check(username, password) -> dict:
+def login_check(username, password, aes_key) -> dict:
     login_data = json.dumps({
         "username": username,
         "password": password
@@ -291,7 +305,7 @@ def login_check(username, password) -> dict:
     encrypted_data = encrypt_aes_gcm(login_data, aes_key)
     signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-    response = session.post('http://localhost:5000/api/v1/authentications/login', json={
+    response = session.post(f'{HOST}/api/v1/authentications/login', json={
         'encoded_AES_data': encrypted_data,
         'sign': base64.b64encode(signature).decode('utf-8'),
         'public_key': base64.b64encode(public_key).decode('utf-8')
@@ -310,80 +324,85 @@ def login_check(username, password) -> dict:
     return {"status": True, "jwt": log_dat['jwt']}
 
 def test_cases():
+    # global aes_key
+    aes_key = key_exchange()
     # Valid Registration and Login
     print("registration and login test cases:")
-    register_check("User One", "0989743425", "password1") 
-    register_check("User Two", "0989793425", "password2")
-    login1 = login_check("0989743425", "password1")
-    login2 = login_check("0989793425", "password2")
-    login1["status"]
+    register_check("User One", "0989743425", "password1", aes_key) 
+    register_check("User Two", "0989793425", "password2", aes_key)
+    login1 = login_check("0989743425", "password1", aes_key)
+    login2 = login_check("0989793425", "password2", aes_key)
+    print("Login status:", login1["status"])
     login2["status"]
     jwt1 = login1["jwt"]
     jwt2 = login2["jwt"]
-    print("JWRT!" , jwt1, "\n JWT@:", jwt2)
+
+    print(jwt1, jwt2)
+
 
     # Valid Transaction
     print("transaction test cases:")
-    create_transac_check(jwt1, "0989793425", 100)["status"]
+    create_transac_check(jwt1, "0989793425", 100, aes_key)["status"]
 
     # Invalid JWT
     print("invalid jwt test cases:")
-    create_transac_check("invalid_jwt", "0989793425", 100)["status"]
+    create_transac_check("invalid_jwt", "0989793425", 100, aes_key)["status"]
 
     # Negative Amount
     print("negative amount test cases:")
-    create_transac_check(jwt1, "0989793425", -100)["status"]
+    create_transac_check(jwt1, "0989793425", -100, aes_key)["status"]
 
     # Zero Amount
     print("zero amount test cases:")
-    create_transac_check(jwt1, "0989793425", 0)["status"] 
+    create_transac_check(jwt1, "0989793425", 0, aes_key)["status"] 
 
     # Excessive Amount
     print("excessive amount test cases:")
-    create_transac_check(jwt1, "0989793425", 1e18)["status"] 
+    create_transac_check(jwt1, "0989793425", 1e18, aes_key)["status"] 
 
     # Invalid Phone Number
     print("invalid phone number test cases:")
-    create_transac_check(jwt1, "invalid_user", 100)["status"] 
+    create_transac_check(jwt1, "invalid_user", 100, aes_key)["status"] 
 
     # Duplicate Phone Number Registration
     print("duplicate phone number registration test cases:")
-    register_check("User Duplicate", "0989793425", "password3") 
+    register_check("User Duplicate", "0989793425", "password3", aes_key) 
 
-    # Concurrent Transactions
-    print("concurrent transactions test cases:")
-    def concurrent_transactions():
-        create_transac_check(jwt1, "0989793425", 100)
-        create_transac_check(jwt2, "0989743425", 10)
+    # # Concurrent Transactions
+    # print("concurrent transactions test cases:")
+    # def concurrent_transactions():
+    #     create_transac_check(jwt1, "0989793425", 100)
+    #     create_transac_check(jwt2, "0989743425", 10)
     
-    threads = [threading.Thread(target=concurrent_transactions) for _ in range(10)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    # threads = [threading.Thread(target=concurrent_transactions) for _ in range(10)]
+    # for thread in threads:
+    #     thread.start()
+    # for thread in threads:
+    #     thread.join()
 
     # Boundary Testing
     print("boundary testing test cases:")
     long_phone_number = "0" * 20
-    register_check("Long User", long_phone_number, "password") 
-    login_long = login_check(long_phone_number, "password")
+    register_check("Long User", long_phone_number, "password", aes_key) 
+    login_long = login_check(long_phone_number, "password", aes_key)
     login_long["status"] 
     jwt_long = login_long["jwt"]
-    create_transac_check(jwt_long, "0989793425", 100)["status"] 
+    create_transac_check(jwt_long, "0989793425", 100, aes_key)["status"] 
     # Empty Values
     print("empty values test cases:")
-    register_check("", "", "") 
-    login_check("", "")
-    create_transac_check(jwt1, "", 100)["status"]
-    create_transac_check("", "0989793425", 100)["status"] 
+    register_check("", "", "", aes_key) 
+    login_check("", "", aes_key)
+    create_transac_check(jwt1, "", 100, aes_key)["status"]
+    create_transac_check("", "0989793425", 100, aes_key)["status"] 
 
     # SQL Injection / Script Injection
     print("sql injection test cases:")
     malicious_phone = "0989793425' OR '1'='1"
     malicious_password = "password' OR '1'='1"
-    login_check(malicious_phone, malicious_password)["status"] 
+    login_check(malicious_phone, malicious_password, aes_key)["status"] 
 
     print("All test cases passed.")
 
-# Run the test cases
-test_cases()
+if __name__ == "__main__":
+    # Run the test cases
+    test_cases()

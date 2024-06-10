@@ -11,6 +11,22 @@ import uuid
 import casbin
 from casbin import Enforcer
 
+import sys
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO, filename='app.log', filemode='a', 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger()
+
+# Custom print function
+def custom_print(*args, **kwargs):
+    message = ' '.join(map(str, args))
+    logger.info(message)
+
+# Override the built-in print function
+print = custom_print
+
 transactions_api_v1 = Blueprint( 'transactions_api_v1', 'transactions_api_v1', url_prefix='/api/v1/transactions')
 
 CORS(transactions_api_v1)
