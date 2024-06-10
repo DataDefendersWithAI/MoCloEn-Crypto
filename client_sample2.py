@@ -10,6 +10,7 @@ import oqs
 from MoClon.api.crypto_helper import CryptoHelper
 from datetime import datetime
 import threading
+import keyring as kr
 
 SIGN_ALGO = "Dilithium2"
 # SIGN_ALGO = "ECDSA"
@@ -20,6 +21,7 @@ HASH_MODE = SHA256
 EC_CURVE = x25519.X25519PrivateKey
 
 HOST = "https://jakeclark.great-site.net"
+# Sửa lại host
 
 import certifi
 print(certifi.where())
@@ -104,16 +106,24 @@ crypto_helper = CryptoHelper(
     ec_curve='curve25519'
 )
 
-if SIGN_ALGO == "Dilithium2":
-    # Generate client keys for signing
-    secret_key, public_key = crypto_helper.generate_keys()
+if kr.get_password("MoClon", "SECRET_KEY") is None:
+    print("No secret key in keyring. Generating new keys.")
+    if SIGN_ALGO == "Dilithium2":
+        # Generate client keys for signing
+        secret_key, public_key = crypto_helper.generate_keys()
+    else:
+        secret_key, public_key = crypto_helper.generate_keys(goal="sign")
+    kr.set_password("MoClon", "SECRET_KEY", base64.b64encode(secret_key))
+    kr.set_password("MoClon", "PUBLIC_KEY", base64.b64encode(public_key))
 else:
-    secret_key, public_key = crypto_helper.generate_keys(goal="sign")
+    secret_key = kr.get_password("MoClon", "SECRET_KEY")
+    public_key = kr.get_password("MoClon", "PUBLIC_KEY")
+    secret_key = base64.b64decode(secret_key)
+    public_key = base64.b64decode(public_key)
 
 print(f'{HOST}/api/v1/keyexs/algo')
 
 def key_exchange():
-
     # Set all algorithms and parameters into user session
     response = session.post(f'{HOST}/api/v1/keyexs/algo', json={
         'sign_algo': SIGN_ALGO,
@@ -235,7 +245,7 @@ def create_transac_check(jwt, recv_username, amt, aes_key) -> dict:
     if response.status_code == 422:
         print("422 Unprocessable Entity: Check the payload and JWT token")
         return {"status": False, "trasac_id": None}
-    print(transaction_response)
+    # print(transaction_response)
     decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
 
     if decrypted_data is None:
