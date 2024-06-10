@@ -336,7 +336,7 @@ ajaxHandler.login = async function (username, password) {
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: "POST",
-            url: "/api/v1/authentications/login",
+            url: "http://172.31.101.231:5000/api/v1/authentications/login",
             data: JSON.stringify(message),
             contentType: "application/json",
             dataType: "json",
@@ -362,7 +362,7 @@ ajaxHandler.register= async function (name, username, password) {
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: "POST",
-            url: "/api/v1/authentications/register",
+            url: "http://172.31.101.231:5000/api/v1/authentications/register",
             data: JSON.stringify(message),
             contentType: "application/json",
             dataType: "json",
@@ -378,40 +378,44 @@ ajaxHandler.register= async function (name, username, password) {
     });
 }
 
-ajaxHandler.transaction_create= async function (recv_username, amt) {
+ajaxHandler.transaction_create = async function (recv_username, amt, message) {
     message = await encrypt_and_sign(JSON.stringify({
         'receiver_username': recv_username,
         'amount': amt,
         'type': 'normal',
-        'message': 'Test transaction',
+        'message': message,
         'timestamp': Date.now().toString(),
     }));
     // Send AJAX request to backend at /todo/group/create to add group
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: "POST",
-            url: "/api/v1/transactions/create",
+            url: "http://127.0.0.1:5000/api/v1/transactions/create",
             data: JSON.stringify(message),
+            headers:{
+                Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTcxNzk1MTI3NywianRpIjoiNjJiNTkxZTQtMWNhZi00MDVmLTg2MjAtNGFmZDUzMmJkYWY4IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6ImVlNWEzYzg0ZDU1NjY0NGY3MjE3MzZkM2M0N2E5ODQ0YTcxNTAxZTAxZWU4Y2UzMmVmMjA3NTZkNmUxNjE2NWQiLCJuYmYiOjE3MTc5NTEyNzcsImNzcmYiOiI0YjA5M2UyYi01NTlmLTRlMzQtODBkYi04ZWUyZTI0ZWRkYTUiLCJleHAiOjE3MTc5NTIxNzd9.brbfHEruwNYCIbc3DYC9vCH5M9tpW0j-SYnsnOqdAo4"
+            },
             contentType: "application/json",
             dataType: "json",
             success: function (data) {
-                console.log("Success");
+                console.log("Success", data);
                 resolve(data);
             },
-            error: function (data) {
-                console.log("Error");
-                reject(data);
+            error: function (xhr, status, error) {
+                console.log("Error", status, error);
+                reject(xhr.responseText);
             }
         });
     });
 }
+
 
 ajaxHandler.transaction_check= async function (transaction_id) {
     // Send AJAX request to backend at /todo/group/create to add group
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: "GET",
-            url: "/api/v1/transactions/"+transaction_id,
+            url: "http://172.31.101.231:5000/api/v1/transactions/"+transaction_id,
             data: JSON.stringify(message),
             contentType: "application/json",
             dataType: "json",
