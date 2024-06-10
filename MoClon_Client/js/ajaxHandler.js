@@ -221,4 +221,74 @@ console.log(res);
 let dec = await decrypt_Response(res.encrypted, res.signature, res.publicKey);
 console.log(dec);
 
+async function performKeyExchange() {
+    await window.sodium.ready;
+    const sodium = window.sodium;
+
+    // Generate client's key pair for ECDH
+    const clientKeyPair = sodium.crypto_kx_keypair();
+
+    // Serialize client's public key
+    const clientPublicKey = sodium.to_base64(clientKeyPair.publicKey);
+
+    // Sign client's public key using Ed25519
+    const signKeyPair = sodium.crypto_sign_keypair();
+    const signature = sodium.crypto_sign_detached(clientKeyPair.publicKey, signKeyPair.privateKey);
+
+    // First we need to include all algorithms we use in the request
+    $.ajax({
+        url: 'http://localhost:5000/api/v1/keyexs/algo',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            sign_algo: "Dilithium2",
+            aes_mode: "GCM",
+            salt: null,
+            aes_keylength_bits: 256,
+            hash_mode: "SHA256",
+            ec_curve: "curve25519"
+        }),
+        success: function(responseData) {
+            console.log(responseData);
+
+            // Send request to the server
+            $.ajax({
+                url: 'http://localhost:5000/api/v1/keyexs/keyex',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    client_public_key: clientPublicKey,
+                    signature: sodium.to_base64(signature),
+                    signature_public_key: sodium.to_base64(signKeyPair.publicKey)
+                }),
+                success: function(responseData) {
+                    const serverPublicKey = sodium.from_base64(responseData.server_public_key);
+                    const serverSignature = sodium.from_base64(responseData.signature);
+                    const serverSignaturePublicKey = sodium.from_base64(responseData.signature_public_key);
+
+                    // Verify server's signature
+                    const isValid = sodium.crypto_sign_verify_detached(serverSignature, serverPublicKey, serverSignaturePublicKey);
+                    if (!isValid) {
+                        console.error('Invalid signature');
+                        return;
+                    }
+
+                    // Perform key exchange to derive a shared key
+                    const sharedKey = sodium.crypto_kx_client_session_keys(clientKeyPair.publicKey, clientKeyPair.privateKey, serverPublicKey);
+
+                    console.log('Shared Key:', sodium.to_base64(sharedKey.sharedTx));
+                },
+                error: function() {
+                    console.error('Failed to exchange keys with the server');
+                }
+            });
+        },
+        error: function() {
+            console.error('Failed to send algorithms to the server');
+        }
+    });
+}
+
+performKeyExchange();
+
 export { encrypt_Request, decrypt_Response };

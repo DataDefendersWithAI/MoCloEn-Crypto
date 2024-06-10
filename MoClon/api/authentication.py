@@ -12,6 +12,22 @@ authentications_api_v1 = Blueprint('authentications_api_v1', 'authentications_ap
 
 CORS(authentications_api_v1)
 
+import sys
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO, filename='app.log', filemode='a', 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger()
+
+# Custom print function
+def custom_print(*args, **kwargs):
+    message = ' '.join(map(str, args))
+    logger.info(message)
+
+# Override the built-in print function
+print = custom_print
+
 @authentications_api_v1.route('/login', methods=['GET', 'POST'])
 def login():
     data = request.get_json()
