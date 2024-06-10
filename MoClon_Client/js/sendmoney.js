@@ -1,13 +1,16 @@
-import { ajaxHandler } from "./ajaxHandler";
+import { ajaxHandler } from "./ajaxHandler.js";
 $(document).ready(function() {
+
     // Send money
     let db = false;
-    $("#send-money").submit(function(event) {
+    $("#send-money").on("click",function(event) {
         event.preventDefault();
         if(db == true) return;
         db = true;
-        let amount =filterXSS( $("#amount").val());
+        let amount =filterXSS($("#amount").val());
         let recipient = filterXSS($("#recipient").val());
-        ajaxHandler.transaction_create(recipient, amount).then((response) => {db = true;});
+        let message = filterXSS($("#message").val());
+        console.log(amount, recipient, message);
+        ajaxHandler.transaction_create(recipient, amount, message).done(() => {db = true;});
     });
 });

@@ -320,7 +320,7 @@ def test_cases():
     login2["status"]
     jwt1 = login1["jwt"]
     jwt2 = login2["jwt"]
-
+    print("JWRT!" , jwt1, "\n JWT@:", jwt2)
 
     # Valid Transaction
     print("transaction test cases:")

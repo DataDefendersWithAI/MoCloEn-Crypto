@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, session, redirect, url_for,current_app
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from MoClon.db import get_user, add_user
+from MoClon.vault import add_user_secrets
 from MoClon.api.crypto_helper import CryptoHelper, hashText, encryptResponse, decryptRequest
 from flask_cors import CORS
 from datetime import datetime
@@ -12,7 +13,7 @@ authentications_api_v1 = Blueprint('authentications_api_v1', 'authentications_ap
 
 CORS(authentications_api_v1)
 
-@authentications_api_v1.route('/login', methods=['GET', 'POST'])
+@authentications_api_v1.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
     login_data = decryptRequest(data)

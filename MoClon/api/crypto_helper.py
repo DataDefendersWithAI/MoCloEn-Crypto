@@ -314,5 +314,5 @@ def encryptResponse(response : dict) -> dict:
         hash_mode=session['hash_mode'],
         ec_curve=session['ec_curve']
     )
-
     return crypto_helper.encrypt_response(response)
+

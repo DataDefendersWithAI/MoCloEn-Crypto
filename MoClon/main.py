@@ -3,7 +3,7 @@ from flask_jwt_extended import JWTManager, jwt_required, create_access_token, ge
 
 from MoClon.api.transactions import transactions_api_v1
 from MoClon.api.authentication import authentications_api_v1
-from MoClon.api.key_exchange import keyexs_api_v1
+from MoClon.api.key_exchange import keyexs_api_v1 
 
 from json import JSONEncoder
 from flask_cors import CORS
