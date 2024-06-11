@@ -4,6 +4,23 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from MoClon.api.crypto_helper import matchHashedText
 
+# Redirect print to log file
+import sys
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO, filename='app.log', filemode='a', 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger()
+
+# Custom print function
+def custom_print(*args, **kwargs):
+    message = ' '.join(map(str, args))
+    logger.info(message)
+
+# Override the built-in print function
+print = custom_print
+
 def init_mongo():
     """
     Initialize MongoDB with credentials from the Flask config.
