@@ -5,6 +5,23 @@ from flask import current_app, g,jsonify
 from werkzeug.local import LocalProxy
 from MoClon.api.crypto_helper import matchHashedText
 
+# Redirect print to log file
+import sys
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO, filename='app.log', filemode='a', 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger()
+
+# Custom print function
+def custom_print(*args, **kwargs):
+    message = ' '.join(map(str, args))
+    logger.info(message)
+
+# Override the built-in print function
+print = custom_print
+
 def init_firestore():
     """
     Initialize Firestore with Firebase credentials.

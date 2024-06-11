@@ -427,7 +427,7 @@ def topup_check(jwt, recv_username, amt, aes_key) -> dict:
     encrypted_data = encrypt_aes_gcm(topup_data, aes_key)
     signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
 
-    response = session.post(f'{HOST}/api/v1/transactions/create', json={
+    response = session.post(f'{HOST}/api/v1/transactions/topup', json={
         'encoded_AES_data': encrypted_data,
         'sign': base64.b64encode(signature).decode('utf-8'),
         'public_key': base64.b64encode(public_key).decode('utf-8')
@@ -448,10 +448,11 @@ def topup_check(jwt, recv_username, amt, aes_key) -> dict:
         return {"status": False, "trasac_id": None}
 
     transaction = json.loads(decrypted_data)
-    if transaction is None or transaction['status'] == "fail":
-        print(transaction)
-        return {"status": False, "trasac_id": None}
-    return {"status": True, "trasac_id": transaction['data']}
+    print(transaction)
+    # if transaction is None or transaction['status'] == "fail":
+    #     print(transaction)
+    #     return {"status": False, "trasac_id": None}
+    # return {"status": True, "trasac_id": transaction['data']}
 
 def test_cases():
     # global aes_key
@@ -469,6 +470,8 @@ def test_cases():
     print("JWRT!" , jwt1, "\n JWT@:", jwt2)
 
     # Valid Transaction
+    print("transaction test cases:")
+    topup_check(jwt1, "0989743025", 100, aes_key)
     print("transaction test cases:")
     create_transac_check(jwt1, "0989743025", 100, aes_key)["status"]
 

@@ -12,6 +12,7 @@ import uuid
 import casbin
 from casbin import Enforcer
 
+# Redirect print to log file
 import sys
 import logging
 # Configure logging
@@ -208,8 +209,8 @@ def api_topup_transaction():
             })), 400
 
 
-        # Mock payment gateway integration
-        payment_gateway_response = mock_payment_gateway(transaction_data['amount'])
+        # Mock payment gateway integration (removed transaction_data['amount'])
+        payment_gateway_response = mock_payment_gateway()
         if payment_gateway_response.get('status') != 'success':
             return jsonify(encryptResponse({
                 "status": "fail",
