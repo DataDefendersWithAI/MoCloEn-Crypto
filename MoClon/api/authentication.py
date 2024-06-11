@@ -74,8 +74,9 @@ def register():
         })), 400
 
     #create a new user
+    salt = str(uuid.uuid4())
     user_id = str(uuid.uuid4()) #generate a unique id for the user
-    hashed_password = hashText(register_data['password'] + register_data['username'], user_id)
+    hashed_password = hashText(register_data['password'] + register_data['username'], salt)
 
     user_data = {
         "user_id": user_id, 
@@ -95,6 +96,7 @@ def register():
     enc_data = user_data #implement here
 
     data_saved = {
+        "salt": salt,
         "data": enc_data,
         "hashes": hashed_password,
     }

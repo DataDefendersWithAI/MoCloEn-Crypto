@@ -81,7 +81,7 @@ def get_user(username: str, password: str) -> dict|None:
         query = coll.where(filter=FieldFilter('data.username', '==', username)).stream()
         for doc in query:
             user = doc.to_dict()
-            if matchHashedText(user['hashes'],  password + username , user['data']['user_id']):
+            if matchHashedText(user['hashes'],  password + username , user['salt']):
                 return user
         return {
             "status": "fail",
