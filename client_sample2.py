@@ -415,6 +415,44 @@ def modify_transac_check(jwt, recv_username, amt, aes_key, test:str) -> dict:
         return {"status": False, "trasac_id": None}
     return {"status": True, "trasac_id": transaction['data']}
 
+def topup_check(jwt, recv_username, amt, aes_key) -> dict:
+    topup_data = json.dumps({
+        'receiver_username': recv_username,
+        'amount': amt,
+        'type': 'topup',
+        'message': 'Test topup',
+        'timestamp': datetime.now().isoformat(),
+    }).encode('utf-8')
+
+    encrypted_data = encrypt_aes_gcm(topup_data, aes_key)
+    signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
+
+    response = session.post(f'{HOST}/api/v1/transactions/create', json={
+        'encoded_AES_data': encrypted_data,
+        'sign': base64.b64encode(signature).decode('utf-8'),
+        'public_key': base64.b64encode(public_key).decode('utf-8')
+    },
+    headers={
+        'Authorization': f'Bearer {jwt}',
+    })
+
+    transaction_response = response.json()
+    if response.status_code == 422:
+        print("422 Unprocessable Entity: Check the payload and JWT token")
+        return {"status": False, "trasac_id": None}
+    #print(transaction_response)
+    decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
+
+    if decrypted_data is None:
+        print("Invalid signature")
+        return {"status": False, "trasac_id": None}
+
+    transaction = json.loads(decrypted_data)
+    if transaction is None or transaction['status'] == "fail":
+        print(transaction)
+        return {"status": False, "trasac_id": None}
+    return {"status": True, "trasac_id": transaction['data']}
+
 def test_cases():
     # global aes_key
     aes_key = key_exchange()
