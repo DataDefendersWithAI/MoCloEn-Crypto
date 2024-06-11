@@ -39,16 +39,19 @@ CORS(users_api_v1)
 def getUser():
     #data = request.get_json()
     #user_data = decryptRequest(data)
-
-    user_data = get_user(get_jwt_identity())
-    if user_data is None:
+    try:
+        user_data = get_user(get_jwt_identity())
+        if user_data is None:
+            return jsonify(encryptResponse({
+                "status": "fail",
+                "message": "User not found"
+            })), 404
         return jsonify(encryptResponse({
-            "status": "fail",
-            "message": "User not found"
-        })), 404
-    return jsonify(encryptResponse({
-        "status": "success",
-        "message": "User found",
-        "data": user_data
-    })), 200
+            "status": "success",
+            "message": "User found",
+            "data": user_data
+        })), 200
+    except Exception as e:
+        print(e)
+        return 
 

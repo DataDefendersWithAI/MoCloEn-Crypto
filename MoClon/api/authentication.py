@@ -81,7 +81,8 @@ def register():
     user_data = {
         "user_id": user_id, 
         "username": register_data['username'],    #phone number   
-        "name": register_data['name'],      
+        "name": register_data['name'],
+        "currency": "USD",     
         "account_type":"normal",
         "balance": 0.0,
         "date-created": datetime.now().isoformat(),
