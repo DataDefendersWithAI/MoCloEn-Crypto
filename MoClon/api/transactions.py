@@ -34,10 +34,6 @@ CORS(transactions_api_v1)
 
 ################################################################
 #ACCESS CONTROLS
-def d_transfer_access():
-    e = Enforcer("MoClon/accessControl/models/transaction.conf", "MoClon/accessControl/policies/transaction.csv")
-    return e
-
 def d_transfer_get_access():
     e = Enforcer("MoClon/accessControl/models/transaction_get.conf", "MoClon/accessControl/policies/transaction_get.csv")
     return e
@@ -48,7 +44,6 @@ def d_transfer_get_all_access():
 
 transfer_get_all_access = d_transfer_get_all_access()
 transfer_get_access = d_transfer_get_access()
-transfer_access = d_transfer_access()
 ################################################################
 
 def check_transaction_valid(from_, to_, req_, isTopup = False)->dict:
