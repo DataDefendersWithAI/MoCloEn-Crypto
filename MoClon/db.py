@@ -4,6 +4,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from flask import current_app, g,jsonify
 from werkzeug.local import LocalProxy
 from MoClon.api.crypto_helper import matchHashedText
+import json
 
 def init_firestore():
     """
@@ -48,15 +49,17 @@ def add_user(new_user_data: dict) -> dict| None:
                 "message": "User already exists"
             }
 
-        upd_time, user_ref = coll.document(new_user_data['data']['user_id']).set(new_user_data)
+        result_ = coll.document(new_user_data['data']['user_id']).set(new_user_data)
         return {
             "status": "success",
-            "message": "Account created successfully at " + str(upd_time.isoformat()),
-            "data": user_ref.data.user_id,
+            "message": "Account created successfully",
+            "data": new_user_data,
         }
     except Exception as e:
-        print(e)
-        return
+        return {
+            "status": "fail",
+            "message": str(e)
+        }
 
 def add_transaction(transaction_data: dict) -> dict |None:
     """
@@ -69,8 +72,11 @@ def add_transaction(transaction_data: dict) -> dict |None:
             "message": "Transaction added successfully"
         }
     except Exception as e:
-        print(e)
-        return
+        return{
+            "status": "fail",
+            "message": str(e)
+        }
+
 
 def get_user(username: str, password: str) -> dict|None:
     """
@@ -88,8 +94,11 @@ def get_user(username: str, password: str) -> dict|None:
             "message": "User not found"
         }
     except Exception as e:
-        print(e)
-        return
+        return{
+            "status": "fail",
+            "message": str(e)
+        }
+
 
 def get_user_by_username(username: str) -> dict|None:
     """
@@ -106,7 +115,11 @@ def get_user_by_username(username: str) -> dict|None:
             "message": "User not found"
         }
     except Exception as e:
-        print(e)
+        return {
+            "status": "fail",
+            "message": str(e)
+        }
+
 
 def get_user_by_hashes(hashes:str) ->dict | None:
     """
@@ -123,8 +136,11 @@ def get_user_by_hashes(hashes:str) ->dict | None:
             "message": "User not found"
         }
     except Exception as e:
-        print(e)
-        return
+        return {
+            "status": "fail",
+            "message": str(e)
+        }
+
 
 def get_transaction(transaction_id: str) -> dict | None:
     """
@@ -139,8 +155,11 @@ def get_transaction(transaction_id: str) -> dict | None:
             "message": "Transaction not found"
         }
     except Exception as e:
-        print(e)
-        return
+        return {
+            "status": "fail",
+            "message": str(e)
+        }
+
 
 def update_balance(users: list) -> dict | None:
     """
@@ -168,8 +187,11 @@ def update_balance(users: list) -> dict | None:
             "message": "Balance updated successfully"
         }
     except Exception as e:
-        print(e)
-        return 
+        return {
+            "status": "fail",
+            "message": str(e)
+        }
+
 
 def get_all_transactions():
     """
@@ -183,7 +205,10 @@ def get_all_transactions():
             transactions.append(doc.to_dict())
         return transactions
     except Exception as e:
-        print(e)
-        return
+        return {
+            "status": "fail",
+            "message": str(e)
+        }
+
     
     
