@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, session, current_app, redirect, u
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from MoClon.db import add_transaction, get_transaction, get_user, get_user_by_username, get_user_by_hashes, update_balance, get_all_transactions
 from MoClon.api.crypto_helper import CryptoHelper,decryptRequest, encryptResponse
+from MoClon.api.payment_gw import mock_payment_gateway
 
 from flask_cors import CORS
 from datetime import datetime, timedelta
@@ -50,20 +51,27 @@ transfer_get_access = d_transfer_get_access()
 transfer_access = d_transfer_access()
 ################################################################
 
-def check_transaction_valid(from_, to_, req_)->dict:
-    if (req_['amount'] <= 0):
-        return {'status': 'fail', 'message': 'Invalid amount'}
-    elif (from_['data']['balance'] <= req_['amount']):
-        return {'status': 'fail', 'message': 'Insufficient balance'}
-    elif (from_['data']['username'] == to_['data']['username']):
-        return {'status': 'fail', 'message': 'Invalid receiver'}
-    elif (from_['data']['user_id'] == to_['data']['user_id']):
-        return {'status': 'fail', 'message': 'Invalid receiver'}
-    elif (from_['data']['attr']['auth'] >= 3):
-        return {'status': 'fail', 'message': 'Insufficient privileges'}
-    elif (to_['data']['attr']['auth'] >= 3):
-        return {'status': 'fail', 'message': 'Insufficient privileges'}
-    return {'status': 'success', 'message': 'Valid transaction'}
+def check_transaction_valid(from_, to_, req_, isTopup = False)->dict:
+    if not isTopup:
+        if (req_['amount'] <= 0):
+            return {'status': 'fail', 'message': 'Invalid amount'}
+        elif (from_['data']['balance'] <= req_['amount']):
+            return {'status': 'fail', 'message': 'Insufficient balance'}
+        elif (from_['data']['username'] == to_['data']['username']):
+            return {'status': 'fail', 'message': 'Invalid receiver'}
+        elif (from_['data']['user_id'] == to_['data']['user_id']):
+            return {'status': 'fail', 'message': 'Invalid receiver'}
+        elif (from_['data']['attr']['auth'] >= 3):
+            return {'status': 'fail', 'message': 'Insufficient privileges'}
+        elif (to_['data']['attr']['auth'] >= 3):
+            return {'status': 'fail', 'message': 'Insufficient privileges'}
+        return {'status': 'success', 'message': 'Valid transaction'}
+    else:
+        if (req_['amount'] <= 0):
+            return {'status': 'fail', 'message': 'Invalid amount'}
+        elif (to_['data']['attr']['auth'] >= 3):
+            return {'status': 'fail', 'message': 'Insufficient privileges'}
+        return {'status': 'success', 'message': 'Valid transaction'}
 
 @transactions_api_v1.route('/<transaction_id>', methods=['GET'])
 @jwt_required()
@@ -202,6 +210,7 @@ def api_topup_transaction():
                 "message": "Invalid timestamp"
             })), 400
 
+
         # Mock payment gateway integration
         payment_gateway_response = mock_payment_gateway(transaction_data['amount'])
         if payment_gateway_response.get('status') != 'success':
@@ -210,9 +219,9 @@ def api_topup_transaction():
                 "message": "Payment gateway error: " + payment_gateway_response.get('message', 'Unknown error')
             })), 400
 
-        receiver_acc = get_user_by_username(transaction_data['receiver_username'])    
+        receiver_acc = get_user_by_hashes(get_jwt_identity())
 
-        check = check_transaction_valid(sender_acc, receiver_acc, transaction_data)
+        check = check_transaction_valid(None, receiver_acc, transaction_data, True)
         if check is None or check['status'] =='fail':
             #save as failed
             return jsonify(encryptResponse(check)), 400
@@ -220,27 +229,25 @@ def api_topup_transaction():
         transaction_id = str(uuid.uuid4())
         amount = transaction_data['amount']
         # Update user balances (assuming successful transaction)
-        sender_acc['data']['balance'] -= amount
         receiver_acc['data']['balance'] += amount
-        sender_acc['data']['transactions'].append(transaction_id)
         receiver_acc['data']['transactions'].append(transaction_id)
         
-        update_balance([sender_acc, receiver_acc])
+        update_balance([receiver_acc])
 
         # addition transaction data
-        transaction_data['sender_username'] = sender_acc['data']['username']
+        transaction_data['sender_username'] = "Debit card"
         # Save the transaction to the database
         add_transaction({
             'transaction_id': transaction_id,
             'data': transaction_data,
             'status': "success",
-            'status_msg': "Transaction created successfully",
+            'status_msg': "Top up "+ amount +"$ successfully",
         })
 
         
         return jsonify(encryptResponse({
             "status": "success",
-            "message": "Transaction created successfully",
+            "message": "Top up "+ amount +"$ successfully",
             "data":  transaction_id
         })), 200
     except Exception as e:
