@@ -21,7 +21,7 @@ AES_KEYLENGTH_BITS = 256
 HASH_MODE = SHA256
 EC_CURVE = x25519.X25519PrivateKey
 
-HOST = "https://jakeclark.great-site.net"
+HOST = "http://127.0.0.1:5000"# "https://jakeclark.great-site.net"
 
 import certifi
 print(certifi.where())
@@ -415,46 +415,60 @@ def modify_transac_check(jwt, recv_username, amt, aes_key, test:str) -> dict:
         return {"status": False, "trasac_id": None}
     return {"status": True, "trasac_id": transaction['data']}
 
+
 def test_cases():
     # global aes_key
     aes_key = key_exchange()
     # Valid Registration and Login
+    user1_phone = "0123456789"
+    user2_phone = "0987654321"
+
+    user1_name = "John Doe"
+    user2_name = "Jane Martha"
+
+    user1_password = "ueS&gfkrZJ2#mL6p"
+    user2_password = "123123123"
+
+
     print("registration and login test cases:")
-    register_check("User One", "0989743025", "password1", aes_key) 
-    register_check("User Two", "0989793427", "password2", aes_key)
-    login1 = login_check("0989743025", "password1", aes_key)
-    login2 = login_check("0989793427", "password2", aes_key)
-    print("Login status:", login1["status"])
-    login2["status"]
+    register_check(user1_name, user1_phone, user1_password , aes_key) 
+    register_check(user2_name, user2_phone, user2_password, aes_key)
+
+    login1 = login_check(user1_phone, user1_password, aes_key)
+    login2 = login_check(user2_phone, user2_password, aes_key)
+
+    print("login user 1 status:", login1["status"])
+    print("login user 2 status:", login2["status"])
+
     jwt1 = login1["jwt"]
     jwt2 = login2["jwt"]
-    print("JWRT!" , jwt1, "\n JWT@:", jwt2)
+    print("JWT 1" , jwt1, "\n JWT 2:", jwt2)
 
     # Valid Transaction
     print("transaction test cases:")
-    create_transac_check(jwt1, "0989743025", 100, aes_key)["status"]
+    create_transac_check(jwt1,user1_phone, 100, aes_key)["status"]
 
     # Modify Transaction (MITM attack)
     print("modify transaction test cases:")
-    print(modify_transac_check(jwt1, "0989793425", 100, aes_key, "modify_data")["status"])
-    print(modify_transac_check(jwt1, "0989793425", 100, aes_key, "modify_sign")["status"])
-    print(modify_transac_check(jwt1, "0989793425", 100, aes_key, "modify_pubkey")["status"])
+    print(modify_transac_check(jwt1, user2_phone, 100, aes_key, "modify_data")["status"])
+    print(modify_transac_check(jwt1, user2_phone, 100, aes_key, "modify_sign")["status"])
+    print(modify_transac_check(jwt1, user2_phone, 100, aes_key, "modify_pubkey")["status"])
 
     # Invalid JWT
     print("invalid jwt test cases:")
-    create_transac_check("invalid_jwt", "0989743025", 100, aes_key)["status"]
+    create_transac_check("invalid_jwt",user1_phone, 100, aes_key)["status"]
 
     # Negative Amount
     print("negative amount test cases:")
-    create_transac_check(jwt1, "0989743025", -100, aes_key)["status"]
+    create_transac_check(jwt1,user1_phone, -100, aes_key)["status"]
 
     # Zero Amount
     print("zero amount test cases:")
-    create_transac_check(jwt1, "0989743025", 0, aes_key)["status"] 
+    create_transac_check(jwt1,user1_phone, 0, aes_key)["status"] 
 
     # Excessive Amount
     print("excessive amount test cases:")
-    create_transac_check(jwt1, "0989743025", 1e18, aes_key)["status"] 
+    create_transac_check(jwt1,user1_phone, 1e18, aes_key)["status"] 
 
     # Invalid Phone Number
     print("invalid phone number test cases:")
@@ -462,12 +476,12 @@ def test_cases():
 
     # Duplicate Phone Number Registration
     print("duplicate phone number registration test cases:")
-    register_check("User Duplicate", "0989743025", "password3", aes_key) 
+    register_check("User Duplicate",user1_phone, "password3", aes_key) 
 
     # # Concurrent Transactions
     # print("concurrent transactions test cases:")
     # def concurrent_transactions():
-    #     create_transac_check(jwt1, "0989743025", 100)
+    #     create_transac_check(jwt1,user1_phone, 100)
     #     create_transac_check(jwt2, "0989743425", 10)
     
     # threads = [threading.Thread(target=concurrent_transactions) for _ in range(10)]
@@ -483,13 +497,13 @@ def test_cases():
     login_long = login_check(long_phone_number, "password", aes_key)
     login_long["status"] 
     jwt_long = login_long["jwt"]
-    create_transac_check(jwt_long, "0989743025", 100, aes_key)["status"] 
+    create_transac_check(jwt_long,user1_phone, 100, aes_key)["status"] 
     # Empty Values
     print("empty values test cases:")
     register_check("", "", "", aes_key) 
     login_check("", "", aes_key)
     create_transac_check(jwt1, "", 100, aes_key)["status"]
-    create_transac_check("", "0989743025", 100, aes_key)["status"] 
+    create_transac_check("",user1_phone, 100, aes_key)["status"] 
 
     # SQL Injection / Script Injection
     print("sql injection test cases:")
@@ -497,7 +511,9 @@ def test_cases():
     malicious_password = "password' OR '1'='1"
     login_check(malicious_phone, malicious_password, aes_key)["status"] 
 
-    print("All test cases passed.")
+    #Get user data checking
+
+    print("Run all test cases completed. Please recheck your code for any errors.")
 
 if __name__ == "__main__":
     # Run the test cases

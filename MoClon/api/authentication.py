@@ -103,6 +103,7 @@ def register():
     }
 
     respond = add_user(data_saved)
+    
     if respond is None:
         return jsonify(encryptResponse({
             "status": "fail",
