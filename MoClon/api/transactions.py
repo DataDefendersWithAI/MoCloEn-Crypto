@@ -240,19 +240,19 @@ def api_topup_transaction():
             'transaction_id': transaction_id,
             'data': transaction_data,
             'status': "success",
-            'status_msg': "Top up "+ amount +"$ successfully",
+            'status_msg': "Top up "+ str(amount) +"$ successfully",
         })
 
         
         return jsonify(encryptResponse({
             "status": "success",
-            "message": "Top up "+ amount +"$ successfully",
+            "message": "Top up "+ str(amount) +"$ successfully",
             "data":  transaction_id
         })), 200
     except Exception as e:
         print(e)
         return jsonify(encryptResponse({
             "status": "fail",
-            "message": "An error occurred while creating transaction"
+            "message": str(e)
         })), 500
     # End secure data response ---------------------------

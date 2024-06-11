@@ -483,10 +483,13 @@ def test_cases():
     print("JWT 1" , jwt1, "\n JWT 2:", jwt2)
 
     # Valid Transaction
+    print("Top up test cases:")
+    topup_check(jwt1, user1_phone , 1000, aes_key) #retry to makesure success
+    topup_check(jwt1, user1_phone , 1000, aes_key)
+    topup_check(jwt1, user1_phone , 1000, aes_key)
+
     print("transaction test cases:")
-    topup_check(jwt1, user1_phone , 100, aes_key)
-    print("transaction test cases:")
-    create_transac_check(jwt1,user1_phone, 100, aes_key)["status"]
+    create_transac_check(jwt1, user1_phone, 100, aes_key)["status"]
 
     # Modify Transaction (MITM attack)
     print("modify transaction test cases:")
