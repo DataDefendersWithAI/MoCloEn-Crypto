@@ -40,8 +40,8 @@ def getUser():
     #data = request.get_json()
     #user_data = decryptRequest(data)
 
-    user = get_user(get_jwt_identity())
-    if user is None:
+    user_data = get_user(get_jwt_identity())
+    if user_data is None:
         return jsonify(encryptResponse({
             "status": "fail",
             "message": "User not found"
@@ -49,5 +49,6 @@ def getUser():
     return jsonify(encryptResponse({
         "status": "success",
         "message": "User found",
-        "data": user
+        "data": user_data
     })), 200
+
