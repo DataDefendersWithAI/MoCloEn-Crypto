@@ -34,7 +34,7 @@ CORS(users_api_v1)
 ################################################################
 ################################################################
 
-@users_api_v1.route('/getUser', methods=['POST'])
+@users_api_v1.route('/get', methods=['GET'])
 @jwt_required()
 def getUser():
     #data = request.get_json()
