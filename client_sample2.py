@@ -106,6 +106,11 @@ crypto_helper = CryptoHelper(
     ec_curve='curve25519'
 )
 
+# if True:
+#     # Delete secret key from keyring
+#     kr.delete_password("MoClon", "SECRET_KEY")
+#     kr.delete_password("MoClon", "PUBLIC_KEY")
+
 if kr.get_password("MoClon", "SECRET_KEY") is None:
     print("No secret key in keyring. Generating new keys.")
     if SIGN_ALGO == "Dilithium2":
@@ -113,13 +118,13 @@ if kr.get_password("MoClon", "SECRET_KEY") is None:
         secret_key, public_key = crypto_helper.generate_keys()
     else:
         secret_key, public_key = crypto_helper.generate_keys(goal="sign")
-    kr.set_password("MoClon", "SECRET_KEY", base64.b64encode(secret_key))
-    kr.set_password("MoClon", "PUBLIC_KEY", base64.b64encode(public_key))
+    kr.set_password("MoClon", "SECRET_KEY", base64.b64encode(secret_key).decode('utf-8'))
+    kr.set_password("MoClon", "PUBLIC_KEY", base64.b64encode(public_key).decode('utf-8'))
 else:
     secret_key = kr.get_password("MoClon", "SECRET_KEY")
     public_key = kr.get_password("MoClon", "PUBLIC_KEY")
-    secret_key = base64.b64decode(secret_key)
-    public_key = base64.b64decode(public_key)
+    secret_key = base64.b64decode(secret_key.encode('utf-8'))
+    public_key = base64.b64decode(public_key.encode('utf-8'))
 
 print(f'{HOST}/api/v1/keyexs/algo')
 
@@ -291,7 +296,7 @@ def register_check(name, username, password, aes_key) -> bool:
     })
 
     register_response = response.json()
-    print(register_response)
+    # print(register_response)
     decrypted_data = decrypt_and_verify(register_response, aes_key, "encoded_AES_data", "sign", "public_key")
 
     if decrypted_data is None:
@@ -331,6 +336,83 @@ def login_check(username, password, aes_key) -> dict:
         return {"status": False, "jwt": None}
     
     return {"status": True, "jwt": log_dat['jwt']}
+
+def modify_transac_check(jwt, recv_username, amt, aes_key, test:str) -> dict:
+    transaction_data = json.dumps({
+        'receiver_username': recv_username,
+        'amount': amt,
+        'type': 'normal',
+        'message': 'Test transaction',
+        'timestamp': datetime.now().isoformat(),
+    }).encode('utf-8')
+
+    encrypted_data = encrypt_aes_gcm(transaction_data, aes_key)
+    signature = sign_message(encrypted_data.encode('utf-8'), secret_key)
+
+    from random import randint
+    import string
+    base64_chars = string.ascii_letters + string.digits + "+/="
+    # Modify the encrypted data
+    if test == "modify_data":
+        # Change any character in the encrypted base64 string to a random character
+        encrypted_data_fake = list(encrypted_data)
+        encrypted_data_fake[randint(0, len(encrypted_data) - 1)] = base64_chars[randint(0, len(base64_chars) - 1)]
+        encrypted_data_fake = "".join(encrypted_data)
+        # Don't change the signature and public key
+        signature_fake = signature
+        public_key_fake = public_key
+    elif test == "modify_sign":
+        # Change any character in the signature to a random byte
+        signature_fake = bytearray(signature)
+        signature_fake[randint(0, len(signature) - 1)] = randint(0, 255)
+        signature_fake = bytes(signature_fake)
+        # Don't change the encrypted data and public key
+        encrypted_data_fake = encrypted_data
+        public_key_fake = public_key
+    elif test == "modify_pubkey":
+        # Change any character in the public key to a random byte
+        public_key_fake = bytearray(public_key)
+        public_key_fake[randint(0, len(public_key) - 1)] = randint(0, 255)
+        public_key_fake = bytes(public_key_fake)
+        # Don't change the encrypted data and signature
+        encrypted_data_fake = encrypted_data
+        signature_fake = signature
+
+    if test:
+        response = session.post(f'{HOST}/api/v1/transactions/create', json={
+            'encoded_AES_data': encrypted_data_fake,
+            'sign': base64.b64encode(signature_fake).decode('utf-8'),
+            'public_key': base64.b64encode(public_key_fake).decode('utf-8')
+        },
+        headers={
+            'Authorization': f'Bearer {jwt}',
+        })
+    else:
+        response = session.post(f'{HOST}/api/v1/transactions/create', json={
+            'encoded_AES_data': encrypted_data,
+            'sign': base64.b64encode(signature).decode('utf-8'),
+            'public_key': base64.b64encode(public_key).decode('utf-8')
+        },
+        headers={
+            'Authorization': f'Bearer {jwt}',
+        })
+
+    transaction_response = response.json()
+    if response.status_code == 422:
+        print("422 Unprocessable Entity: Check the payload and JWT token")
+        return {"status": False, "trasac_id": None}
+    # print(transaction_response)
+    decrypted_data = decrypt_and_verify(transaction_response, aes_key, "encoded_AES_data", "sign", "public_key")
+
+    if decrypted_data is None:
+        print("Invalid signature")
+        return {"status": False, "trasac_id": None}
+
+    transaction = json.loads(decrypted_data)
+    if transaction is None or transaction['status'] == "fail":
+        print(transaction)
+        return {"status": False, "trasac_id": None}
+    return {"status": True, "trasac_id": transaction['data']}
 
 def test_cases():
     # global aes_key
@@ -377,6 +459,12 @@ def test_cases():
     print("duplicate phone number registration test cases:")
     register_check("User Duplicate", "0989793425", "password3", aes_key) 
 
+    # Modify Transaction (MITM attack)
+    print("modify transaction test cases:")
+    print(modify_transac_check(jwt1, "0989793425", 100, aes_key, "modify_data")["status"])
+    print(modify_transac_check(jwt1, "0989793425", 100, aes_key, "modify_sign")["status"])
+    print(modify_transac_check(jwt1, "0989793425", 100, aes_key, "modify_pubkey")["status"])
+
     # # Concurrent Transactions
     # print("concurrent transactions test cases:")
     # def concurrent_transactions():
@@ -409,6 +497,8 @@ def test_cases():
     malicious_phone = "0989793425' OR '1'='1"
     malicious_password = "password' OR '1'='1"
     login_check(malicious_phone, malicious_password, aes_key)["status"] 
+
+    
 
     print("All test cases passed.")
 
