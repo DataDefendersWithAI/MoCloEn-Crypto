@@ -55,6 +55,8 @@ def check_transaction_valid(from_, to_, req_, isTopup = False)->dict:
     if not isTopup:
         if (req_['amount'] <= 0):
             return {'status': 'fail', 'message': 'Invalid amount'}
+        elif (req_['amount'] >= 1e4):
+            return {'status': 'fail', 'message': 'The amount is too high please contact the support team to verify the amount'}
         elif (from_['data']['balance'] <= req_['amount']):
             return {'status': 'fail', 'message': 'Insufficient balance'}
         elif (from_['data']['username'] == to_['data']['username']):
@@ -236,6 +238,7 @@ def api_topup_transaction():
 
         # addition transaction data
         transaction_data['sender_username'] = "Debit card"
+        transaction_data['currency'] = "USD"
         # Save the transaction to the database
         add_transaction({
             'transaction_id': transaction_id,
